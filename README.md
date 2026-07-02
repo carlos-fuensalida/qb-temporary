@@ -1,73 +1,186 @@
-# QBT Chromium container
+# QB Container — Query Builder browser
 
-A dedicated Chromium (based on [`jlesage/chromium`](https://github.com/jlesage/docker-chromium))
-that opens Query Builder and is locked to it. You view it in your own browser
-via the image's built-in noVNC web layer.
+A dedicated Chromium browser, delivered as a Docker container, that opens
+**Query Builder** and is locked to it. Users access it through their own web
+browser (via the built-in noVNC web layer) — nothing to install on the client.
 
 - **Normal browser window** — toolbar, Home button, back/forward, reload — so a
-  user who gets stuck can always recover without restarting the container.
-- **Lockdown via Chromium managed policy** (`policy.json`), enforced at the
-  browser engine: every URL outside `URLAllowlist` is blocked, whether reached
-  by typing, a link, a redirect, or a popup. **No proxy or firewall involved.**
+  user who gets stuck can recover without restarting the container.
+- **Locked down** to Query Builder + its allowed SSO/login domains via a
+  Chromium managed policy ([policy.json](policy.json)). Any other URL is blocked.
+- **Downloads** are saved to a mounted folder and made readable/writable to
+  other users and groups automatically.
 
-## Build & run
+Target site: `https://qbt-staging.fdsaservices.com/qbt/`
+
+---
+
+## Prerequisites
+
+- Docker installed and running.
+- A host folder to receive downloads (e.g. a shared/network drive).
+
+---
+
+## Start the app
+
+### Option A — build and run locally
 
 ```bash
+# 1. Build the image (run from this directory)
 docker build -t qbt-kiosk .
 
-docker run -d --name=qb \
-  --cap-add=SYS_ADMIN \
+# 2. Start the container (downloads land in ./downloads for local testing)
+mkdir -p downloads
+docker run -d \
+  --name=qb \
   --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
-  -v /files/shared/drive:/config/Downloads:rw \
+  -v "$PWD/downloads:/config/Downloads:rw" \
   qbt-kiosk
 ```
 
-Or with compose:
+> For a real deployment, swap `$PWD/downloads` for the shared/network path,
+> e.g. `-v /files/shared/drive:/config/Downloads:rw`.
+
+### Option B — run a prebuilt image from the registry
+
+```bash
+docker run -d \
+  --name=qb-staging-container \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -p 4443:4443 \
+  -v /files/shared/drive:/config/Downloads:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+```
+
+### Option C — docker compose
+
+Edit the download path in [docker-compose.yml](docker-compose.yml) if needed, then:
 
 ```bash
 docker compose up -d --build
 ```
 
-Then browse to <http://your-host-ip:4443>.
+### Option D — plain `docker run`, matching docker-compose.yml
 
-- `--cap-add=SYS_ADMIN` lets Chromium's sandbox work under this base image.
-- `--shm-size 2g` avoids Chromium crashes on heavy pages.
-- `/config/Downloads` (capital D) is where Chromium saves downloads — mount it
-  to a host/network path.
+Equivalent to Option C, if you'd rather not use compose:
 
-## Change the URL / allowed hosts
+```bash
+docker build -t qbt-kiosk:latest .
 
-**`policy.json` is the single place to edit.** To repoint the kiosk or permit
-another domain:
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  -p 4443:4443 \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e WEB_LISTENING_PORT=4443 \
+  -v /files/shared/drive:/config/Downloads:rw \
+  qbt-kiosk:latest
+```
 
-1. Add the host to `URLAllowlist` in `policy.json`.
+Or, using the prebuilt registry image instead of building locally:
+
+```bash
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  -p 4443:4443 \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e WEB_LISTENING_PORT=4443 \
+  -v /files/shared/drive:/config/Downloads:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+```
+
+---
+
+## Open the app
+
+Browse to:
+
+```
+http://<host-ip>:4443
+```
+
+(on the same machine: <http://localhost:4443>)
+
+You'll land on Query Builder in a normal Chromium window.
+
+---
+
+## What the flags mean
+
+| Flag | Purpose |
+|------|---------|
+| `--shm-size 2g` | Prevents Chromium crashes on heavy pages. |
+| `-e USER_ID` / `-e GROUP_ID` | Owner uid/gid of the container and of downloaded files — match them to the account/group that owns the host download folder. |
+| `-p 4443:4443` | Exposes the web GUI on host port 4443. |
+| `-v <host>:/config/Downloads:rw` | Where downloaded files land on the host (note the capital **D**). |
+
+> **No `--cap-add=SYS_ADMIN` needed.** This image runs Chromium with
+> `--no-sandbox`, so the capability would do nothing. The base image has no env
+> var to append custom Chromium flags, so
+> [root/etc/services.d/app/params](root/etc/services.d/app/params) overrides the
+> app service's arg list to add `--test-type` alongside `--no-sandbox`, which
+> suppresses the "unsupported command-line flag" warning banner. (The sandbox
+> stays off — an accepted trade-off for this URL-locked internal kiosk.)
+
+---
+
+## Downloads & permissions
+
+Chromium creates downloads as `0600` (owner-only). A small built-in service
+(`fix-downloads`) automatically relaxes new files to `666` (and folders to
+`777`) so other users and groups on the host can read and write them.
+
+To confirm it's running:
+
+```bash
+docker logs qb 2>&1 | grep fix-downloads      # expect: [fix-downloads] started...
+```
+
+Downloaded files should show as `-rw-rw-rw-`. To make them group-scoped instead
+of world-open, change `FILE_MODE`/`DIR_MODE` in
+[root/etc/services.d/fix-downloads/run](root/etc/services.d/fix-downloads/run)
+to `664`/`775` and rebuild.
+
+---
+
+## Change the URL / allow another domain
+
+[policy.json](policy.json) is the single place to edit:
+
+1. Add the host to `URLAllowlist`.
 2. If it's the new landing page, update `HomepageLocation` and
    `RestoreOnStartupURLs`.
-3. Rebuild.
+3. Rebuild the image.
 
-`URLAllowlist` entries match the host **and its subdomains**. The default
-landing page is set by the policy's `RestoreOnStartupURLs`; the Home button
-goes to `HomepageLocation`.
+`URLAllowlist` entries match the host **and its subdomains**.
 
-## Verify the lock took effect
+---
 
-Inside the session, open `chrome://policy` — it lists the active policies.
-Confirm `URLBlocklist`, `URLAllowlist`, `ShowHomeButton`, and `HomepageLocation`
-are present. If they're missing, the policy file didn't land at a path this
-image's Chromium reads — check the `COPY` paths in the `Dockerfile`.
+## Verify the lockdown
 
-## Watch out: auth redirect hosts
+Inside the browser session, open `chrome://policy`. Confirm `URLBlocklist`,
+`URLAllowlist`, `HomepageLocation`, and `ShowHomeButton` are listed with
+**Status: OK**. Then try navigating somewhere off-list (e.g. `example.com`) — it
+should show a **blocked** page.
 
-Federated logins often bounce through extra domains that aren't obvious up
-front. If a login stalls, the blocked host will show a "blocked" page — note it
-(or check `chrome://policy`), add it to `URLAllowlist`, and rebuild. Microsoft
-sign-in, for example, may also touch `login.microsoft.com`, `login.live.com`,
-`aadcdn.msftauth.net`, `logincdn.msauth.net`.
+> If a login flow stalls, it's likely hitting a redirect host not in the
+> allowlist (federated logins often bounce through extra domains). Note the
+> blocked host, add it to `URLAllowlist`, and rebuild.
 
-## Security / TLS
+---
 
-Access is over HTTP by default. For zero TLS warnings for the user, either set
-`SECURE_CONNECTION=1` and mount a real trusted cert at `/config/certs`
-(`web-fullchain.pem` + `web-privkey.pem`), or leave `SECURE_CONNECTION=0` and
-terminate HTTPS at an upstream gateway. Self-signed certs will warn the user.
+## Manage the container
+
+```bash
+docker logs -f qb            # follow logs
+docker stop qb               # stop
+docker start qb              # start again
+docker rm -f qb              # remove
+# with compose:
+docker compose down
+```

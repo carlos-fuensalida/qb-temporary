@@ -19,9 +19,13 @@ COPY policy.json /etc/chromium-browser/policies/managed/policy.json
 
 # Seed the "Query Builder" bookmark + install the init hook that places it,
 # plus a service that relaxes download file permissions (Chromium forces 0600).
+# Also overrides the app service's `params` file to add --test-type whenever
+# --no-sandbox is used, suppressing Chromium's "unsupported command-line flag"
+# infobar (the base image has no env var to append custom Chromium args).
 COPY root/ /
 RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
-             /etc/services.d/fix-downloads/run
+             /etc/services.d/fix-downloads/run \
+             /etc/services.d/app/params
 
 ENV APP_NAME="Query Builder"
 ENV WEB_LISTENING_PORT="4443"

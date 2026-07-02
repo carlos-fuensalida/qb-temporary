@@ -5,15 +5,13 @@ services:
     restart: unless-stopped
     ports:
       - "4443:4443"
-    # Chromium needs a user namespace for its sandbox under this base image.
-    cap_add:
-      - SYS_ADMIN
     environment:
-      # TLS for the user-facing connection. For ZERO user warnings, either:
-      #   A) SECURE_CONNECTION=1 and mount a real trusted cert (see volumes), or
-      #   B) SECURE_CONNECTION=0 and let an upstream gateway terminate HTTPS.
-      # Self-signed (SECURE_CONNECTION=1 with no cert) WILL warn the user.
-      - SECURE_CONNECTION=0
+      # Owner uid/gid of the container process and of downloaded files. Set these
+      # to match the account/group that owns the host download share. (The
+      # downloads are also chmod'd to 666 by the fix-downloads service, so access
+      # works regardless — these just control ownership in `ls -l`.)
+      - USER_ID=10001
+      - GROUP_ID=1001
       - WEB_LISTENING_PORT=4443
     volumes:
       # Chromium saves to /config/Downloads (capital D) — mount that to the host.
