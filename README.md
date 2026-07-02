@@ -48,7 +48,7 @@ docker run -d \
 
 ```bash
 docker run -d \
-  --name=qb-staging-container \
+  --name=qb \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
@@ -56,17 +56,7 @@ docker run -d \
   qbtcontainers.azurecr.io/qbtstagingcontainer:latest
 ```
 
-### Option C — docker compose
-
-Edit the download path in [docker-compose.yml](docker-compose.yml) if needed, then:
-
-```bash
-docker compose up -d --build
-```
-
-### Option D — plain `docker run`, matching docker-compose.yml
-
-Equivalent to Option C, if you'd rather not use compose:
+### Option C — plain `docker run` with `--restart=unless-stopped`
 
 ```bash
 docker build -t qbt-kiosk:latest .
@@ -76,7 +66,6 @@ docker run -d \
   --restart=unless-stopped \
   -p 4443:4443 \
   -e USER_ID=10001 -e GROUP_ID=1001 \
-  -e WEB_LISTENING_PORT=4443 \
   -v /files/shared/drive:/config/Downloads:rw \
   qbt-kiosk:latest
 ```
@@ -89,7 +78,6 @@ docker run -d \
   --restart=unless-stopped \
   -p 4443:4443 \
   -e USER_ID=10001 -e GROUP_ID=1001 \
-  -e WEB_LISTENING_PORT=4443 \
   -v /files/shared/drive:/config/Downloads:rw \
   qbtcontainers.azurecr.io/qbtstagingcontainer:latest
 ```
@@ -108,43 +96,6 @@ http://<host-ip>:4443
 
 You'll land on Query Builder in a normal Chromium window.
 
----
-
-## What the flags mean
-
-| Flag | Purpose |
-|------|---------|
-| `--shm-size 2g` | Prevents Chromium crashes on heavy pages. |
-| `-e USER_ID` / `-e GROUP_ID` | Owner uid/gid of the container and of downloaded files — match them to the account/group that owns the host download folder. |
-| `-p 4443:4443` | Exposes the web GUI on host port 4443. |
-| `-v <host>:/config/Downloads:rw` | Where downloaded files land on the host (note the capital **D**). |
-
-> **No `--cap-add=SYS_ADMIN` needed.** This image runs Chromium with
-> `--no-sandbox`, so the capability would do nothing. The base image has no env
-> var to append custom Chromium flags, so
-> [root/etc/services.d/app/params](root/etc/services.d/app/params) overrides the
-> app service's arg list to add `--test-type` alongside `--no-sandbox`, which
-> suppresses the "unsupported command-line flag" warning banner. (The sandbox
-> stays off — an accepted trade-off for this URL-locked internal kiosk.)
-
----
-
-## Downloads & permissions
-
-Chromium creates downloads as `0600` (owner-only). A small built-in service
-(`fix-downloads`) automatically relaxes new files to `666` (and folders to
-`777`) so other users and groups on the host can read and write them.
-
-To confirm it's running:
-
-```bash
-docker logs qb 2>&1 | grep fix-downloads      # expect: [fix-downloads] started...
-```
-
-Downloaded files should show as `-rw-rw-rw-`. To make them group-scoped instead
-of world-open, change `FILE_MODE`/`DIR_MODE` in
-[root/etc/services.d/fix-downloads/run](root/etc/services.d/fix-downloads/run)
-to `664`/`775` and rebuild.
 
 ---
 
@@ -161,26 +112,38 @@ to `664`/`775` and rebuild.
 
 ---
 
-## Verify the lockdown
+## HOW TO: Build, tag, and push a release image
 
-Inside the browser session, open `chrome://policy`. Confirm `URLBlocklist`,
-`URLAllowlist`, `HomepageLocation`, and `ShowHomeButton` are listed with
-**Status: OK**. Then try navigating somewhere off-list (e.g. `example.com`) — it
-should show a **blocked** page.
+The registry (`qbtcontainers.azurecr.io`) hosts separate staging and prod
+images. Before building, set the target URL in **both** of these files:
 
-> If a login flow stalls, it's likely hitting a redirect host not in the
-> allowlist (federated logins often bounce through extra domains). Note the
-> blocked host, add it to `URLAllowlist`, and rebuild.
+- [policy.json](policy.json) — `HomepageLocation` and `RestoreOnStartupURLs`.
+- [root/defaults/Bookmarks](root/defaults/Bookmarks) — the `url` field of the
+  "Query Builder" bookmark.
 
----
+### Staging
 
-## Manage the container
+URL: `https://qbt-staging.fdsaservices.com/qbt/`
 
 ```bash
-docker logs -f qb            # follow logs
-docker stop qb               # stop
-docker start qb              # start again
-docker rm -f qb              # remove
-# with compose:
-docker compose down
+docker login -u read-write -p <password> qbtcontainers.azurecr.io
+
+docker build -t qbt-kiosk:latest .
+docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+docker push qbtcontainers.azurecr.io/qbtstagingcontainer:latest
 ```
+
+### Prod
+
+Set the URL in both files above to
+`https://fdsa-query-builder.alzheimersdata.org/qbt/`, then run the same
+commands against the prod image name:
+
+```bash
+docker login -u read-write -p <password> qbtcontainers.azurecr.io
+
+docker build -t qbt-kiosk:latest .
+docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtcontainer:latest
+docker push qbtcontainers.azurecr.io/qbtcontainer:latest
+```
+
