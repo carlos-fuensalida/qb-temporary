@@ -1,0 +1,42 @@
+{
+   "checksum": "285b207b0dd3efc03cdb46cf8012aca7",
+   "roots": {
+      "bookmark_bar": {
+         "children": [
+            {
+               "date_added": "13286954536000000",
+               "guid": "1a2b3c4d-1234-4000-8000-000000000001",
+               "id": "3",
+               "name": "Query Builder",
+               "type": "url",
+               "url": "https://qbt-staging.fdsaservices.com/qbt/"
+            }
+         ],
+         "date_added": "13286954536000000",
+         "date_modified": "13286954536000000",
+         "guid": "00000000-0000-4000-a000-000000000001",
+         "id": "1",
+         "name": "Bookmarks bar",
+         "type": "folder"
+      },
+      "other": {
+         "children": [],
+         "date_added": "13286954536000000",
+         "date_modified": "0",
+         "guid": "00000000-0000-4000-a000-000000000002",
+         "id": "2",
+         "name": "Other bookmarks",
+         "type": "folder"
+      },
+      "synced": {
+         "children": [],
+         "date_added": "13286954536000000",
+         "date_modified": "0",
+         "guid": "00000000-0000-4000-a000-000000000003",
+         "id": "4",
+         "name": "Mobile bookmarks",
+         "type": "folder"
+      }
+   },
+   "version": 1
+}

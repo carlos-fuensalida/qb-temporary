@@ -1,0 +1,48 @@
+{
+  "URLBlocklist": ["*"],
+  "URLAllowlist": [
+    "qbt-staging.fdsaservices.com",
+    "stage.grip-research.org",
+    "pmp-fdsa.heart.org",
+    "pmp-qa.heartblr.org",
+    "pmp-dev.heartblr.org",
+    "pmp-fdsa-dev.heartblr.org",
+    "login.microsoftonline.com",
+    "discover.epnd.org",
+    "chrome://downloads",
+    "chrome://downloads/*",
+    "aha-shared-qa-v2.auth.us-east-1.amazoncognito.com",
+    "pmp-auth-dev.heartblr.org",
+    "www.alzheimersdata.org", 
+    "alzheimersdata.org",
+    "mailto",
+    "mailto:",
+    "https://fdsa-query-builder.alzheimersdata.org",
+    "https://qbt-pre-prod.fdsaservices.com",
+    "https://discover.alzheimersdata.org",
+    "https://aha-shared-v2.auth.us-east-1.amazoncognito.com",
+    "https://answerdataportal.b2clogin.com",
+    "https://accounts.google.com",
+    "https://login.ukserp.ac.uk",
+    "https://discover.alzheimersdata.org",
+    "https://orcid.org",
+    "heart-onmicrosoft-com.access.mcas.ms"
+
+  ],
+
+  "ShowHomeButton": true,
+  "HomepageLocation": "https://qbt-staging.fdsaservices.com/qbt/",
+  "HomepageIsNewTabPage": false,
+
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": ["https://qbt-staging.fdsaservices.com/qbt/"],
+
+  "BookmarkBarEnabled": true,
+  "ManagedBookmarks": [
+    { "toplevel_name": "Bookmarks" }
+  ],
+
+  "DefaultBrowserSettingEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true
+}

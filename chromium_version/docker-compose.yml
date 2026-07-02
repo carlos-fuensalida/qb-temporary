@@ -1,0 +1,18 @@
+services:
+  qbt:
+    image: qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+    restart: unless-stopped
+    ports:
+      - "4443:4443"
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      # TLS for the user-facing connection. For ZERO user warnings, either:
+      #   A) SECURE_CONNECTION=1 and mount a real trusted cert (see volumes), or
+      #   B) SECURE_CONNECTION=0 and let the TRE gateway terminate HTTPS.
+      # Self-signed (SECURE_CONNECTION=1 with no cert) WILL warn the user.
+      - SECURE_CONNECTION=0
+      - WEB_LISTENING_PORT=4443
+    volumes:
+      # Chromium saves to /config/Downloads (capital D) — mount that to the host.
+      - /files/shared/drive:/config/Downloads:rw
