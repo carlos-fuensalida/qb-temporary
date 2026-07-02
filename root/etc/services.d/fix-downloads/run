@@ -1,0 +1,23 @@
+#!/bin/sh
+# Chromium creates downloads with mode 0600 (via mkstemp) and never relaxes it,
+# so UMASK can't help. Watch the Downloads dir and open new files/dirs up so
+# host users and groups can read + write them.
+#
+# Adjust the modes below if you want to be less permissive, e.g. 664 / 775
+# (group read/write, others read-only).
+DIR=/config/Downloads
+FILE_MODE=666
+DIR_MODE=777
+
+echo "[fix-downloads] started; watching $DIR (files -> $FILE_MODE, dirs -> $DIR_MODE)"
+
+while true; do
+  if [ -d "$DIR" ]; then
+    # BusyBox find: use -exec ... \; ('+' is not supported).
+    # -mindepth 1 leaves the mounted Downloads dir itself untouched.
+    # Errors are NOT suppressed, so any problem shows up in `docker logs`.
+    find "$DIR" -mindepth 1 -type f ! -perm "$FILE_MODE" -exec chmod "$FILE_MODE" {} \;
+    find "$DIR" -mindepth 1 -type d ! -perm "$DIR_MODE"  -exec chmod "$DIR_MODE"  {} \;
+  fi
+  sleep 2
+done

@@ -17,9 +17,11 @@ FROM jlesage/chromium:latest
 COPY policy.json /etc/chromium/policies/managed/policy.json
 COPY policy.json /etc/chromium-browser/policies/managed/policy.json
 
-# Seed the "Query Builder" bookmark + install the init hook that places it.
+# Seed the "Query Builder" bookmark + install the init hook that places it,
+# plus a service that relaxes download file permissions (Chromium forces 0600).
 COPY root/ /
-RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh
+RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
+             /etc/services.d/fix-downloads/run
 
 ENV APP_NAME="Query Builder"
 ENV WEB_LISTENING_PORT="4443"
