@@ -9,7 +9,7 @@
                "id": "3",
                "name": "Query Builder",
                "type": "url",
-               "url": "https://qbt-staging.fdsaservices.com/qbt/"
+               "url": "https://fdsa-query-builder.alzheimersdata.org/qbt/"
             }
          ],
          "date_added": "13286954536000000",
