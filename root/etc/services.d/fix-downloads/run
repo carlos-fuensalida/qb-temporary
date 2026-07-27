@@ -5,7 +5,11 @@
 #
 # Adjust the modes below if you want to be less permissive, e.g. 664 / 775
 # (group read/write, others read-only).
-DIR=/config/Downloads
+#
+# /downloads (not /config/Downloads) is intentional: it keeps the mounted
+# volume outside /config so the base image's per-start recursive chown of
+# /config never has to walk it — see the Dockerfile for why that matters.
+DIR=/downloads
 FILE_MODE=666
 DIR_MODE=777
 
