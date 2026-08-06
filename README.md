@@ -149,6 +149,13 @@ images. Before building, set the target URL in **both** of these files:
 - [root/defaults/Bookmarks](root/defaults/Bookmarks) — the `url` field of the
   "Query Builder" bookmark.
 
+Also bump the `name` field of that same bookmark so the bookmark bar shows
+which build is running (e.g. `Query Builder v3 (staging)` vs
+`Query Builder v3` for prod, `Query Builder v4 (staging)` for the next
+release, etc.) — this is the only place the running image's version is
+visible to a user, so keep it in sync with whatever you're actually building
+and pushing below.
+
 ### Staging
 
 URL: `https://qbt-staging.fdsaservices.com/qbt/`
