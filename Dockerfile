@@ -27,6 +27,15 @@ RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
              /etc/services.d/fix-downloads/run \
              /etc/services.d/app/params
 
+# Downloads live outside /config on purpose. The base image's startup init
+# recursively chowns all of /config to USER_ID/GROUP_ID on every launch; when
+# the mounted downloads volume is a network share (e.g. Azure Files/CIFS),
+# that recursive chown turns into a per-file network round trip and can add
+# minutes to container start. Keeping /downloads outside /config means that
+# chown only ever walks local disk, and downloads are redirected here via the
+# DownloadDirectory policy in policy.json.
+RUN mkdir -p /downloads
+
 ENV APP_NAME="Query Builder"
 ENV WEB_LISTENING_PORT="4443"
 

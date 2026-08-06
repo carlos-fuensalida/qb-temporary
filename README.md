@@ -37,12 +37,12 @@ docker run -d \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
-  -v "$PWD/downloads:/config/Downloads:rw" \
+  -v "$PWD/downloads:/downloads:rw" \
   qbt-kiosk
 ```
 
 > For a real deployment, swap `$PWD/downloads` for the shared/network path,
-> e.g. `-v /files/shared/drive:/config/Downloads:rw`.
+> e.g. `-v /files/shared/drive:/downloads:rw`.
 
 ### Option B — run a prebuilt image from the registry
 
@@ -52,7 +52,7 @@ docker run -d \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
-  -v /files/shared/drive:/config/Downloads:rw \
+  -v /files/shared/drive:/downloads:rw \
   qbtcontainers.azurecr.io/qbtstagingcontainer:latest
 ```
 
@@ -66,7 +66,7 @@ docker run -d \
   --restart=unless-stopped \
   -p 4443:4443 \
   -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/config/Downloads:rw \
+  -v /files/shared/drive:/downloads:rw \
   qbt-kiosk:latest
 ```
 
@@ -78,9 +78,14 @@ docker run -d \
   --restart=unless-stopped \
   -p 4443:4443 \
   -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/config/Downloads:rw \
+  -v /files/shared/drive:/downloads:rw \
   qbtcontainers.azurecr.io/qbtstagingcontainer:latest
 ```
+
+> **Note:** the downloads volume mounts at `/downloads`, not `/config/Downloads`.
+> It's kept outside `/config` on purpose — see
+> [Why downloads live outside `/config`](#why-downloads-live-outside-config) —
+> so update any existing pod/volume specs accordingly when upgrading.
 
 ---
 
@@ -109,6 +114,29 @@ You'll land on Query Builder in a normal Chromium window.
 3. Rebuild the image.
 
 `URLAllowlist` entries match the host **and its subdomains**.
+
+---
+
+## Why downloads live outside `/config`
+
+The downloads volume mounts at `/downloads`, not `/config/Downloads`, and
+Chromium is pointed at it via the `DownloadDirectory` policy in
+[policy.json](policy.json).
+
+This matters because the base image (`jlesage/chromium`) recursively `chown`s
+the entire `/config` tree to `USER_ID`/`GROUP_ID` on **every** container
+start, not just the first one. That's fine when `/config` is local disk, but
+if the mounted downloads folder is a network share (e.g. an Azure Files/CIFS
+mount, as used by the AKS automation workspaces), a recursive chown over the
+network turns into a per-file round trip — adding minutes to startup, and
+getting slower as the share fills up. Keeping the network mount outside
+`/config` means that chown only ever walks local disk, so startup stays fast
+regardless of how much is in the downloads share.
+
+Do **not** "fix" this by setting `TAKE_CONFIG_OWNERSHIP=0` — that disables
+the chown for local `/config` paths too (`xdg`, `log`, the Chromium profile),
+which need it and aren't covered by any volume's own uid/gid mount options,
+and causes a permission-denied crash loop instead.
 
 ---
 
