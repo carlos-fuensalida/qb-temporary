@@ -140,6 +140,25 @@ and causes a permission-denied crash loop instead.
 
 ---
 
+## Why the native file dialog's "Downloads" shortcut needed its own fix
+
+`DownloadDirectory` (above) only controls where Chromium's own *automatic*
+downloads land. It has no effect on the native GTK file-picker dialog (the
+one you get from `Ctrl+S` / "Save Page As" / "Open File") — that dialog's
+"Downloads" shortcut and default folder come from XDG user-dirs
+(`~/.config/user-dirs.dirs`), a completely separate mechanism that nothing in
+this image used to set. Left alone, it falls back to `$HOME/Downloads`
+inside `/config` — an empty, unrelated folder — instead of the shared
+`/downloads` mount.
+
+[`root/etc/cont-init.d/61-seed-downloads-dir.sh`](root/etc/cont-init.d/61-seed-downloads-dir.sh)
+fixes this on every container start by writing `XDG_DOWNLOAD_DIR=/downloads`
+into `user-dirs.dirs`, disabling `xdg-user-dirs-update` so it can't silently
+reset that back to the default, and seeding the GTK bookmarks file with a
+`/downloads` entry directly as a second safety net.
+
+---
+
 ## HOW TO: Build, tag, and push a release image
 
 The registry (`qbtcontainers.azurecr.io`) hosts separate staging and prod

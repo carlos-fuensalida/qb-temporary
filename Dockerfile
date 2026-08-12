@@ -22,8 +22,12 @@ COPY policy.json /etc/chromium-browser/policies/managed/policy.json
 # Also overrides the app service's `params` file to add --test-type whenever
 # --no-sandbox is used, suppressing Chromium's "unsupported command-line flag"
 # infobar (the base image has no env var to append custom Chromium args).
+# 61-seed-downloads-dir.sh points the native GTK file dialog's "Downloads"
+# shortcut at /downloads too — DownloadDirectory (below) only covers
+# Chromium's own silent downloads, not that dialog's default location.
 COPY root/ /
 RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
+             /etc/cont-init.d/61-seed-downloads-dir.sh \
              /etc/services.d/fix-downloads/run \
              /etc/services.d/app/params
 
