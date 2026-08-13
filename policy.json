@@ -46,6 +46,8 @@
   ],
 
   "DefaultBrowserSettingEnabled": false,
+  "ExtensionInstallForcelist": ["pnbbookneacpggbngfmhfggennhigonh"],
+
   "BrowserSignin": 0,
   "SyncDisabled": true
 }

@@ -17,6 +17,28 @@ FROM jlesage/chromium:latest
 COPY policy.json /etc/chromium/policies/managed/policy.json
 COPY policy.json /etc/chromium-browser/policies/managed/policy.json
 
+# The base image ships its OWN policy files into that same directory:
+# managed_policies.json and a managed_policies.json.bk sample. Chromium
+# merges every file in policies/managed (the extension is irrelevant — the
+# .bk is live policy too), so both collide with ours. Observed on a deployed
+# container via chrome://policy:
+#   - DefaultDownloadDirectory = /config/Downloads, "OK, Superseding"
+#     (from managed_policies.json) — this is what made the file dialog open
+#     inside the container's local /config instead of the shared mount.
+#   - ManagedBookmarks "Warning, Conflict" — the .bk sample defines its own
+#     Google/Youtube/Chrome-links bookmarks against ours.
+# Rather than add competing values and depend on undefined merge precedence
+# between two files, drop the base image's files so policy.json is the
+# single source of truth. Its one key worth keeping,
+# ExtensionInstallForcelist, is folded into policy.json instead (extension
+# pnbbookneacpggbngfmhfggennhigonh — shipped by the base image; don't drop
+# it from policy.json without first checking what it does);
+# DefaultBrowserSettingEnabled was already set there.
+RUN rm -f /etc/chromium/policies/managed/managed_policies.json \
+          /etc/chromium/policies/managed/managed_policies.json.bk \
+          /etc/chromium-browser/policies/managed/managed_policies.json \
+          /etc/chromium-browser/policies/managed/managed_policies.json.bk
+
 # Seed the "Query Builder" bookmark + install the init hook that places it,
 # plus a service that relaxes download file permissions (Chromium forces 0600).
 # Also overrides the app service's `params` file to add --test-type whenever
