@@ -14,36 +14,49 @@ internal `/config` storage instead of the shared network drive.
 
 ## Root cause
 
-Two separate mechanisms control where a file ends up, and only one of them
-was configured:
+The volume mount was never the problem — `docker inspect qb` confirmed
+`bind: /mnt/vm-shared-storage -> /downloads` throughout, and automatic
+downloads were landing on the shared drive correctly.
 
-- **Automatic/silent downloads** are controlled by Chromium's
-  `DownloadDirectory` policy (`policy.json`), which already correctly points
-  at `/downloads` — the shared drive, bind-mounted via `-v ...:/downloads:rw`.
-  This part was working.
-- **Manual saves** (`Ctrl+S`, "Save Page As", the native file-picker's
-  "Downloads" shortcut) are controlled separately, by XDG user-dirs
-  (`~/.config/user-dirs.dirs`) — an OS-level setting the image never set.
-  Left unset, it fell back to the container's default home location
-  (`/config`), which sits on its own internal Docker volume — not the shared
-  drive, not visible outside the container.
+The problem was a **conflict between two Chromium policy files**. The base
+image ships its own `managed_policies.json` (plus a `managed_policies.json.bk`
+sample) into `/etc/chromium/policies/managed/` — the same directory this
+project's `policy.json` is copied into. Chromium merges *every* file in that
+directory, and the base image's file sets:
 
-That's why `qbdownload.zip` was found inside a Docker-managed volume
-(`/var/snap/docker/.../volumes/<hash>/_data/qbdownload.zip`) mounted at
-`/config`, while the actual shared-drive mount (`/downloads`) was confirmed
-correct the whole time via `docker inspect qb`.
+```json
+"DefaultDownloadDirectory": "/config/Downloads"
+```
+
+`chrome://policy` on the deployed container showed that value with status
+**"OK, Superseding"**, overriding this project's `DownloadDirectory:
+"/downloads"` for the purpose of the file dialog's starting folder. So the
+native save dialog opened inside the container's local `/config` instead of
+the shared mount, and anything saved from it landed in the container's
+internal Docker volume — which is exactly where `qbdownload.zip` was found
+(`/var/snap/docker/.../volumes/<hash>/_data/qbdownload.zip`).
+
+The same collision made `ManagedBookmarks` report **"Warning, Conflict"**,
+against the sample bookmarks defined in the `.bk` file. The `.bk` extension
+is not a guard — Chromium loads it as policy too.
 
 ## The fix
 
-`root/etc/cont-init.d/61-seed-downloads-dir.sh` runs on every container start
-and:
-- Writes `XDG_DOWNLOAD_DIR="/downloads"` into `user-dirs.dirs`.
-- Disables `xdg-user-dirs-update` so it can't silently reset that back.
-- Seeds a matching `/downloads` bookmark into the GTK file-picker sidebar
-  directly, as a second safety net.
+The Dockerfile now deletes the base image's `managed_policies.json` and
+`managed_policies.json.bk`, so `policy.json` is the single source of policy
+truth and there is no merge conflict to reason about. The one key worth
+keeping from that file, `ExtensionInstallForcelist`, is folded into
+`policy.json`. `DownloadDirectory` and `DefaultDownloadDirectory` are both
+set to `/downloads`.
 
 No mount paths changed. **Do not** change `-v /mnt/vm-shared-storage:/downloads:rw`
 to anything else — that mount was already correct.
+
+> **Important for existing deployments:** Chromium remembers the last folder
+> used in a save dialog, and that memory lives in its profile under `/config`.
+> If the container is recreated against an existing `/config` volume, the
+> dialog can still open at the old location even with the policy fixed. See
+> step 2 below — remove the old volume so the profile starts clean.
 
 ---
 
@@ -67,12 +80,24 @@ docker images | grep grip
 
 You should see `qbtcontainers.azurecr.io/qbtstagingcontainer   grip   ...`.
 
-### 2. Remove the currently running container
+### 2. Remove the currently running container and its `/config` volume
 
-A restart won't pick up the new image — it has to be recreated:
+A restart won't pick up the new image — it has to be recreated. Remove the
+anonymous `/config` volume along with it, so Chromium's profile (which
+remembers the last folder used in a save dialog) starts clean:
 
 ```bash
-docker rm -f qb
+docker rm -f -v qb
+```
+
+`-v` removes the container's anonymous volumes. It does **not** touch the
+shared drive — that's a bind mount to a host path, not a Docker volume, so
+`/mnt/vm-shared-storage` and everything in it is untouched.
+
+Confirm the old `/config` volume is gone (optional):
+
+```bash
+docker volume ls -qf dangling=true
 ```
 
 ### 3. Run the new container
@@ -103,7 +128,19 @@ Expect:
 bind: /mnt/vm-shared-storage -> /downloads
 ```
 
-### 5. Verify the actual fix
+### 5. Confirm the policy conflict is gone
+
+In the browser session, open `chrome://policy` and check:
+
+- `DefaultDownloadDirectory` reads `/downloads` (not `/config/Downloads`) and
+  no longer shows **"Superseding"**.
+- `ManagedBookmarks` no longer shows **"Warning, Conflict"**.
+
+If either still shows the old value, the base image's policy files were not
+removed — re-check the `rm -f` step in the Dockerfile actually ran during the
+build.
+
+### 6. Verify the actual fix
 
 Open `http://<host-ip>:4443`, manually save a test file (`Ctrl+S` or
 "Save Page As" — not an automatic download, since that path already worked
