@@ -25,8 +25,10 @@
 # Candidate config roots, de-duplicated below:
 #   1. the runtime-resolved XDG_CONFIG_HOME (authoritative when set)
 #   2. $HOME/.config (the spec default when XDG_CONFIG_HOME is unset)
-#   3. /config/xdg/config (the base image's relocated XDG tree)
-CANDIDATES="${XDG_CONFIG_HOME:-} ${HOME:-/config}/.config /config/xdg/config"
+#   3. /config/.config — the app user's home is /config, and cont-init runs
+#      as root ($HOME=/root), so #2 does NOT cover this. Must be explicit.
+#   4. /config/xdg/config (the base image's relocated XDG tree)
+CANDIDATES="${XDG_CONFIG_HOME:-} ${HOME:-/config}/.config /config/.config /config/xdg/config"
 
 SEEDED=""
 for CFG in $CANDIDATES; do
