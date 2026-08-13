@@ -35,6 +35,7 @@
   "HomepageIsNewTabPage": false,
 
   "DownloadDirectory": "/downloads",
+  "DefaultDownloadDirectory": "/downloads",
 
   "RestoreOnStartup": 4,
   "RestoreOnStartupURLs": ["https://qbt-staging.fdsaservices.com/qbt/"],
