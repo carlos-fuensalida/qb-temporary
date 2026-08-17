@@ -50,6 +50,7 @@ RUN rm -f /etc/chromium/policies/managed/managed_policies.json \
 COPY root/ /
 RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
              /etc/cont-init.d/61-seed-downloads-dir.sh \
+             /etc/cont-init.d/62-seed-picker-dir.sh \
              /etc/services.d/fix-downloads/run \
              /etc/services.d/app/params
 

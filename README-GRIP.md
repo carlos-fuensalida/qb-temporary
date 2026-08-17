@@ -52,11 +52,35 @@ set to `/downloads`.
 No mount paths changed. **Do not** change `-v /mnt/vm-shared-storage:/downloads:rw`
 to anything else — that mount was already correct.
 
-> **Important for existing deployments:** Chromium remembers the last folder
-> used in a save dialog, and that memory lives in its profile under `/config`.
-> If the container is recreated against an existing `/config` volume, the
-> dialog can still open at the old location even with the policy fixed. See
-> step 2 below — remove the old volume so the profile starts clean.
+## The save dialog's starting folder — a second, separate mechanism
+
+Fixing the policy conflict above was necessary but not sufficient, because
+Query Builder does not save through a normal browser download at all. Its
+"Download Results" button uses the **File System Access API**
+(`window.showSaveFilePicker`) — recognisable by the dialog's title bar
+reading *"Warning: this site can see edits you make"*.
+
+That API ignores `DownloadDirectory` and `DefaultDownloadDirectory`
+completely. Its starting folder comes from one of two places:
+
+1. a `startIn` hint the web page passes — Query Builder passes none, and
+   adding one is a change only the Query Builder application team can make;
+2. failing that, the folder that origin last picked.
+
+With nothing remembered, Chromium falls back to `$HOME` — `/config` — which
+is what users saw on a freshly started container.
+
+`root/etc/cont-init.d/62-seed-picker-dir.sh` seeds that "last picked"
+memory with `/downloads` before Chromium first launches, for every Query
+Builder origin this image is used against. A brand new container then behaves
+as though a user had already saved there once.
+
+> **This only applies to a fresh profile.** The script deliberately does not
+> touch an existing `Preferences` file — editing nested JSON in a live
+> profile without a JSON parser (the image has no `jq` or `python`) risks
+> corrupting it, and an existing profile already has a memory of its own.
+> That makes the `-v` in step 2 below **required**, not optional: without it
+> the container keeps the old profile and the seed never applies.
 
 ---
 
@@ -82,9 +106,10 @@ You should see `qbtcontainers.azurecr.io/qbtstagingcontainer   grip   ...`.
 
 ### 2. Remove the currently running container and its `/config` volume
 
-A restart won't pick up the new image — it has to be recreated. Remove the
-anonymous `/config` volume along with it, so Chromium's profile (which
-remembers the last folder used in a save dialog) starts clean:
+A restart won't pick up the new image — it has to be recreated. Removing the
+anonymous `/config` volume is **required**, not optional: the picker-directory
+seed only applies to a fresh Chromium profile, so a container recreated
+against the old volume will still open the dialog at the old location.
 
 ```bash
 docker rm -f -v qb
@@ -140,7 +165,17 @@ If either still shows the old value, the base image's policy files were not
 removed — re-check the `rm -f` step in the Dockerfile actually ran during the
 build.
 
-### 6. Verify the actual fix
+### 6. Confirm the picker seed landed
+
+```bash
+docker logs qb 2>&1 | grep seed-picker-dir
+```
+
+Expect `seeded /config/chromium/Default/Preferences with /downloads as the
+last-picked directory`. If it instead says *"already exists; leaving the
+profile alone"*, the old `/config` volume was reused — redo step 2 with `-v`.
+
+### 7. Verify the actual fix
 
 Open `http://<host-ip>:4443`, manually save a test file (`Ctrl+S` or
 "Save Page As" — not an automatic download, since that path already worked
