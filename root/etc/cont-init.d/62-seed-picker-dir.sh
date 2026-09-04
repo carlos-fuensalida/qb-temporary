@@ -37,6 +37,9 @@ if [ -e "$PREFS" ]; then
   exit 0
 fi
 
+# Resolved by 59-set-download-dir.sh, which runs first.
+DOWNLOAD_DIR="$(cat /var/run/qb-download-dir 2>/dev/null || echo /downloads)"
+
 # Timestamps are Chromium's internal format (microseconds since 1601). The
 # values are copied from a real captured entry; they only record when the
 # directory was last picked, so a fixed point in the past is fine.
@@ -46,11 +49,11 @@ TIMESTAMP="13431206074976105"
 # Every origin this image is pointed at across environments. Listing them all
 # keeps this file out of the per-environment edit list in README.md — one
 # image behaves correctly whichever URL policy.json is built for.
-ENTRY='{"last_modified":"'"$LAST_MODIFIED"'","setting":{"default-id":{"display-name":"downloads","path":"/downloads","path-type":0,"timestamp":"'"$TIMESTAMP"'"}}}'
+ENTRY='{"last_modified":"'"$LAST_MODIFIED"'","setting":{"default-id":{"display-name":"downloads","path":"'"$DOWNLOAD_DIR"'","path-type":0,"timestamp":"'"$TIMESTAMP"'"}}}'
 
 mkdir -p "$PROFILE_DIR"
 cat > "$PREFS" <<EOF
 {"profile":{"content_settings":{"exceptions":{"file_system_last_picked_directory":{"https://qbt-staging.fdsaservices.com:443,*":$ENTRY,"https://fdsa-query-builder.alzheimersdata.org:443,*":$ENTRY,"https://qbt-pre-prod.fdsaservices.com:443,*":$ENTRY}}}}}
 EOF
 
-echo "[seed-picker-dir] seeded $PREFS with /downloads as the last-picked directory"
+echo "[seed-picker-dir] seeded $PREFS with $DOWNLOAD_DIR as the last-picked directory"

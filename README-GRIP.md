@@ -47,10 +47,11 @@ The Dockerfile now deletes the base image's `managed_policies.json` and
 truth and there is no merge conflict to reason about. The one key worth
 keeping from that file, `ExtensionInstallForcelist`, is folded into
 `policy.json`. `DownloadDirectory` and `DefaultDownloadDirectory` are both
-set to `/downloads`.
+set to the configured downloads directory.
 
-No mount paths changed. **Do not** change `-v /mnt/vm-shared-storage:/downloads:rw`
-to anything else — that mount was already correct.
+The mount path itself is now a deployment choice rather than something this
+image fixes — set `QB_DOWNLOAD_DIR` to wherever you mount the share. See
+[Choosing where downloads go](#choosing-where-downloads-go).
 
 ## The save dialog's starting folder — a second, separate mechanism
 
@@ -71,8 +72,8 @@ With nothing remembered, Chromium falls back to `$HOME` — `/config` — which
 is what users saw on a freshly started container.
 
 `root/etc/cont-init.d/62-seed-picker-dir.sh` seeds that "last picked"
-memory with `/downloads` before Chromium first launches, for every Query
-Builder origin this image is used against. A brand new container then behaves
+memory with the configured downloads directory before Chromium first
+launches, for every Query Builder origin this image is used against. A brand new container then behaves
 as though a user had already saved there once.
 
 > **This only applies to a fresh profile.** The script deliberately does not
@@ -140,6 +141,48 @@ Then transfer it to the target VM by whatever channel you already use.
 
 ---
 
+## Choosing where downloads go
+
+`QB_DOWNLOAD_DIR` (default `/downloads`) is the single place this is
+configured. At container start, `59-set-download-dir.sh` resolves it and
+propagates it to everything that needs it:
+
+| Consumer | What it controls |
+|---|---|
+| `policy.json` → `DownloadDirectory` / `DefaultDownloadDirectory` | where automatic downloads land |
+| `user-dirs.dirs` → `XDG_DOWNLOAD_DIR` | the dialog sidebar's "Downloads" shortcut |
+| `gtk-3.0/bookmarks` | the same shortcut, for dialogs that read bookmarks instead |
+| `62-seed-picker-dir.sh` | the folder the save dialog **opens at** |
+| `fix-downloads` service | which directory gets its permissions relaxed |
+
+Set it to whatever you mount the share at. Nothing else needs editing, and
+the value is validated — a relative path or one containing quotes is rejected
+with a log line and falls back to `/downloads` rather than corrupting the
+policy file.
+
+### Trade-off: inside `/config` vs outside
+
+Mounting the share **inside** `/config` (as GRIP does) is simpler — the
+dialog's own home directory contains the share, so users need no navigation
+at all. But the base image recursively `chown`s the whole of `/config` on
+**every** container start. If the share is a network filesystem (Azure
+Files/CIFS), that becomes a per-file network round trip and can add minutes
+to startup, getting worse as the share fills — the exact problem
+[README-STAG.md](README-STAG.md) documents moving *away* from for the AKS
+workspaces.
+
+So:
+
+- **Local disk or a fast mount** → inside `/config` is fine.
+- **Network share that grows large** → mount outside `/config` (leave
+  `QB_DOWNLOAD_DIR` at its `/downloads` default).
+
+The container logs a warning at startup when the configured path is inside
+`/config`, so this is visible in `docker logs qb` rather than a silent
+surprise.
+
+---
+
 ## Deploying: load the image from the `.tar` file
 
 Steps below run on the target VM, and assume `qbt-grip.tar` has arrived.
@@ -183,6 +226,28 @@ docker volume ls -qf dangling=true
 
 ### 3. Run the new container
 
+Where the shared drive is mounted is your choice — set `QB_DOWNLOAD_DIR` to
+match wherever you mount it, and the container points Chromium, the file
+dialog and the permission-fixing service at that path. See
+[Choosing where downloads go](#choosing-where-downloads-go).
+
+**GRIP — share mounted inside `/config`:**
+
+```bash
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/config/Downloads \
+  -p 4443:4443 \
+  -v /mnt/vm-shared-storage:/config/Downloads:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+```
+
+**AKS automation workspaces — share mounted outside `/config`** (the
+default, so no env var needed):
+
 ```bash
 docker run -d \
   --name=qb \
@@ -190,9 +255,13 @@ docker run -d \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
-  -v /mnt/vm-shared-storage:/downloads:rw \
+  -v /files/shared/drive:/downloads:rw \
   qbtcontainers.azurecr.io/qbtstagingcontainer:grip
 ```
+
+The mount target and `QB_DOWNLOAD_DIR` must be **the same path**, and the
+path is **case-sensitive** — `/config/Downloads` and `/config/downloads` are
+different directories on Linux.
 
 Adjust `/mnt/vm-shared-storage` only if this VM's shared-storage path
 differs — keep the `:/downloads:rw` side exactly as-is.

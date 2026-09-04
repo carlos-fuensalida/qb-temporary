@@ -28,6 +28,9 @@
 #   3. /config/.config — the app user's home is /config, and cont-init runs
 #      as root ($HOME=/root), so #2 does NOT cover this. Must be explicit.
 #   4. /config/xdg/config (the base image's relocated XDG tree)
+# Resolved by 59-set-download-dir.sh, which runs first.
+DOWNLOAD_DIR="$(cat /var/run/qb-download-dir 2>/dev/null || echo /downloads)"
+
 CANDIDATES="${XDG_CONFIG_HOME:-} ${HOME:-/config}/.config /config/.config /config/xdg/config"
 
 SEEDED=""
@@ -42,7 +45,7 @@ for CFG in $CANDIDATES; do
   # Point XDG's Downloads dir at the real mount, and disable
   # xdg-user-dirs-update so it can't silently regenerate this back to the
   # default $HOME/Downloads on a later run.
-  printf '%s\n' 'XDG_DOWNLOAD_DIR="/downloads"' > "$CFG/user-dirs.dirs"
+  printf '%s\n' 'XDG_DOWNLOAD_DIR="'"$DOWNLOAD_DIR"'"' > "$CFG/user-dirs.dirs"
   printf '%s\n' 'enabled=False' > "$CFG/user-dirs.conf"
 
   # Seed the GTK file-chooser sidebar bookmark too, since some dialogs read
@@ -50,8 +53,9 @@ for CFG in $CANDIDATES; do
   # overwrite: the base image may ship its own bookmarks here (e.g. /app).
   BOOKMARKS="$CFG/gtk-3.0/bookmarks"
   touch "$BOOKMARKS"
-  grep -qxF 'file:///downloads Downloads' "$BOOKMARKS" || \
-    printf '%s\n' 'file:///downloads Downloads' >> "$BOOKMARKS"
+  BOOKMARK_LINE="file://$DOWNLOAD_DIR Downloads"
+  grep -qxF "$BOOKMARK_LINE" "$BOOKMARKS" || \
+    printf '%s\n' "$BOOKMARK_LINE" >> "$BOOKMARKS"
 
   echo "[seed-downloads-dir] seeded $CFG"
 done
