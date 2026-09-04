@@ -114,20 +114,33 @@ untouched.
 
 ## Step 6 — Run
 
+Set `QB_DOWNLOAD_DIR` to wherever you mount the share — the container points
+Chromium, the file dialog and the permission-fixing service at that path.
+GRIP mounts inside `/config`:
+
 ```bash
 docker run -d \
   --name=qb \
   --restart=unless-stopped \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/config/Downloads \
   -p 4443:4443 \
-  -v /mnt/vm-shared-storage:/downloads:rw \
+  -v /mnt/vm-shared-storage:/config/Downloads:rw \
   qbtcontainers.azurecr.io/qbtcontainer:grip
 ```
 
-**Check the shared-storage path before running this.** `/mnt/vm-shared-storage`
-is the path on the staging GRIP VM; the production VM may mount its share
-elsewhere. Only the left side changes — keep `:/downloads:rw` exactly as is.
+**Three things to check before running this:**
+
+1. `/mnt/vm-shared-storage` is the staging GRIP VM's share path — confirm the
+   production VM's.
+2. The mount target and `QB_DOWNLOAD_DIR` must be **the same path**, and it is
+   **case-sensitive**: `/config/Downloads` ≠ `/config/downloads`.
+3. Mounting inside `/config` means the base image's per-start recursive
+   `chown` walks the share. Fine on local disk; on a large network share it
+   slows startup — mount outside `/config` and drop the env var instead. The
+   container logs a warning when the path is inside `/config`. See
+   [README-GRIP.md](README-GRIP.md#trade-off-inside-config-vs-outside).
 
 Likewise confirm `USER_ID`/`GROUP_ID` match the owner of the production
 share, so downloaded files land with usable ownership.
