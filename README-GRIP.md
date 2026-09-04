@@ -84,16 +84,72 @@ as though a user had already saved there once.
 
 ---
 
-## Deploying the fix: load the image from a `.tar` file
+## Building the image
 
-This image is tagged `qbtcontainers.azurecr.io/qbtstagingcontainer:grip` and
-delivered as a `.tar` file (e.g. because this VM can't reach the registry
-directly). Steps below assume you've already received `qbt-grip.tar`.
+Build on a VM with internet access and Docker. No registry login is needed —
+the tag is only a name, and it's only required if you later choose to push.
+
+```bash
+git clone -b claude/downloads-folder-location-imjnz1 \
+  https://github.com/carlos-fuensalida/qb-temporary.git
+cd qb-temporary
+
+docker build -t qbtcontainers.azurecr.io/qbtstagingcontainer:grip .
+```
+
+### Post-build checks — run both
+
+These take seconds and catch the two mistakes that would otherwise only show
+up after a ~1 GB transfer to the target VM.
+
+**1. The base image's conflicting policy files are gone:**
+
+```bash
+docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtstagingcontainer:grip \
+  -c 'ls /etc/chromium/policies/managed/'
+```
+
+Expect **only** `policy.json`. If `managed_policies.json` or
+`managed_policies.json.bk` appear, the `rm -f` layer didn't run and the
+download-location bug is still present.
+
+**2. The staging URL was baked in, not production:**
+
+```bash
+docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtstagingcontainer:grip \
+  -c 'grep -E "HomepageLocation|RestoreOnStartupURLs" /etc/chromium/policies/managed/policy.json'
+```
+
+Expect `qbt-staging.fdsaservices.com`. Seeing
+`fdsa-query-builder.alzheimersdata.org` means the production branch
+(`claude/grip-prod-image`) was cloned by mistake.
+
+### Save to a `.tar`
+
+```bash
+docker save -o qbt-grip.tar qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+```
+
+Or compressed, to cut transfer size:
+
+```bash
+docker save qbtcontainers.azurecr.io/qbtstagingcontainer:grip | gzip > qbt-grip.tar.gz
+```
+
+Then transfer it to the target VM by whatever channel you already use.
+
+---
+
+## Deploying: load the image from the `.tar` file
+
+Steps below run on the target VM, and assume `qbt-grip.tar` has arrived.
 
 ### 1. Load the image
 
 ```bash
 docker load -i qbt-grip.tar
+# or, if gzipped:
+gunzip -c qbt-grip.tar.gz | docker load
 ```
 
 Confirm it's there:
