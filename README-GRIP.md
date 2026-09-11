@@ -266,24 +266,30 @@ different directories on Linux.
 Adjust `/mnt/vm-shared-storage` only if this VM's shared-storage path
 differs — keep the `:/downloads:rw` side exactly as-is.
 
+Steps 4-7 below use `<DOWNLOAD_DIR>` as a placeholder — substitute whatever
+you set `QB_DOWNLOAD_DIR` to above (`/config/Downloads` for GRIP,
+`/downloads` for the AKS default).
+
 ### 4. Confirm the mount
 
 ```bash
-docker inspect qb --format '{{range .Mounts}}{{if eq .Destination "/downloads"}}{{.Type}}: {{.Source}} -> {{.Destination}}{{end}}{{end}}'
+docker inspect qb --format '{{range .Mounts}}{{if eq .Destination "<DOWNLOAD_DIR>"}}{{.Type}}: {{.Source}} -> {{.Destination}}{{end}}{{end}}'
 ```
 
 Expect:
 
 ```
-bind: /mnt/vm-shared-storage -> /downloads
+bind: <your shared path> -> <DOWNLOAD_DIR>
 ```
+
+If it says `volume` instead of `bind`, the mount didn't take.
 
 ### 5. Confirm the policy conflict is gone
 
 In the browser session, open `chrome://policy` and check:
 
-- `DefaultDownloadDirectory` reads `/downloads` (not `/config/Downloads`) and
-  no longer shows **"Superseding"**.
+- `DownloadDirectory` and `DefaultDownloadDirectory` both read
+  `<DOWNLOAD_DIR>` and neither shows **"Superseding"**.
 - `ManagedBookmarks` no longer shows **"Warning, Conflict"**.
 
 If either still shows the old value, the base image's policy files were not
@@ -293,33 +299,55 @@ build.
 ### 6. Confirm the picker seed landed
 
 ```bash
-docker logs qb 2>&1 | grep seed-picker-dir
+docker logs qb 2>&1 | grep -E "seed-picker-dir|set-download-dir"
 ```
 
-Expect `seeded /config/chromium/Default/Preferences with /downloads as the
-last-picked directory`. If it instead says *"already exists; leaving the
-profile alone"*, the old `/config` volume was reused — redo step 2 with `-v`.
+Expect `[set-download-dir] downloads directory is <DOWNLOAD_DIR>` and
+`[seed-picker-dir] seeded /config/chromium/Default/Preferences with
+<DOWNLOAD_DIR> as the last-picked directory`. If the latter instead says
+*"already exists; leaving the profile alone"*, the old `/config` volume was
+reused — redo step 2 with `-v`.
 
 ### 7. Verify the actual fix
 
-Open `http://<host-ip>:4443`, manually save a test file (`Ctrl+S` or
-"Save Page As" — not an automatic download, since that path already worked
-before this fix), then confirm it landed in the right place:
+Open `http://<host-ip>:4443`. Run a query, click **Download Results**, and
+confirm the save dialog opens directly at the shared drive — no navigating
+past `/config` first if you're on the GRIP variant. Then confirm the file
+landed on the shared drive:
 
 ```bash
 find /mnt/vm-shared-storage -iname "<test filename>"
 ```
 
 It should show up there, and **not** under
-`/var/snap/docker/.../volumes/.../_data`.
+`/var/snap/docker/.../volumes/.../_data` (or, on other Docker installs,
+`/var/lib/docker/volumes/.../_data`).
+
+### 8. Check startup time (GRIP / any mount inside `/config`)
+
+Time how long the container took to become ready. A sudden multi-minute
+startup means this VM's mount is behaving like a network share under
+`/config`'s recursive `chown`, not local disk — see
+[Trade-off: inside `/config` vs outside](#trade-off-inside-config-vs-outside)
+above; stop and re-check the mount type rather than shipping it.
+
+### 9. Confirm the bookmark label
+
+The bookmark bar should show the label for whichever build this is (e.g.
+`Query Builder v4 (staging)`) — a quick way to confirm the right image is
+running without opening `chrome://policy`. See
+[root/defaults/Bookmarks](root/defaults/Bookmarks).
 
 ---
 
 ## How to verify
 
-- A manually-saved file lands on the shared drive (`/mnt/vm-shared-storage`),
-  not inside the container's internal `/config` volume.
-- The native file-picker's "Downloads" shortcut opens directly into the
-  shared drive instead of an empty/unrelated folder.
+- A manually-saved file lands on the shared drive, not inside the
+  container's internal `/config` volume.
+- The native file-picker's "Downloads" shortcut, and the "Download Results"
+  save dialog, both open directly into the shared drive instead of an
+  empty/unrelated folder or the bare `/config` root.
 - Automatic/silent downloads continue to work exactly as before — only the
   manual-save path changes.
+- Container startup time is unchanged from before this fix.
+- The bookmark bar shows the label for the build that's actually running.
