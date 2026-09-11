@@ -9,7 +9,7 @@ switched to production — it carries every downloads-location fix described in
 |---|---|
 | Target site | `https://fdsa-query-builder.alzheimersdata.org/qbt/` |
 | Image tag | `qbtcontainers.azurecr.io/qbtcontainer:grip` |
-| Bookmark label | `Query Builder v3` (no "(staging)" suffix) |
+| Bookmark label | `Query Builder v4` (no "(staging)" suffix) |
 | Delivery | `docker save` → `.tar` → air-gapped VM |
 
 ---
@@ -25,7 +25,7 @@ identical.
 | `policy.json` → `HomepageLocation` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
 | `policy.json` → `RestoreOnStartupURLs` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
 | `root/defaults/Bookmarks` → `url` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
-| `root/defaults/Bookmarks` → `name` | `Query Builder v3 (staging)` | `Query Builder v3` |
+| `root/defaults/Bookmarks` → `name` | `Query Builder v4 (staging)` | `Query Builder v4` |
 
 The production host was already present in `URLAllowlist`, and
 `62-seed-picker-dir.sh` already seeds the production origin
@@ -149,41 +149,56 @@ share, so downloaded files land with usable ownership.
 
 ## Verification
 
+The steps below use `<DOWNLOAD_DIR>` as a placeholder for whatever you set
+`QB_DOWNLOAD_DIR` to in Step 6 (`/config/Downloads` in the example above).
+
 **1. The mount:**
 
 ```bash
-docker inspect qb --format '{{range .Mounts}}{{if eq .Destination "/downloads"}}{{.Type}}: {{.Source}} -> {{.Destination}}{{end}}{{end}}'
+docker inspect qb --format '{{range .Mounts}}{{if eq .Destination "<DOWNLOAD_DIR>"}}{{.Type}}: {{.Source}} -> {{.Destination}}{{end}}{{end}}'
 ```
 
-Expect `bind: <your shared path> -> /downloads`. If it says `volume`, the
+Expect `bind: <your shared path> -> <DOWNLOAD_DIR>`. If it says `volume`, the
 bind mount didn't take.
 
 **2. The picker seed applied:**
 
 ```bash
-docker logs qb 2>&1 | grep seed-picker-dir
+docker logs qb 2>&1 | grep -E "seed-picker-dir|set-download-dir"
 ```
 
-Expect `seeded /config/chromium/Default/Preferences with /downloads as the
-last-picked directory`. If it says *"already exists; leaving the profile
-alone"*, the old volume was reused — redo step 5 with `-v`.
+Expect `[set-download-dir] downloads directory is <DOWNLOAD_DIR>` and
+`[seed-picker-dir] seeded /config/chromium/Default/Preferences with
+<DOWNLOAD_DIR> as the last-picked directory`. If the latter instead says
+*"already exists; leaving the profile alone"*, the old volume was reused —
+redo step 5 with `-v`.
 
 **3. Policy is clean.** Open `chrome://policy` in the session:
 
 - `HomepageLocation` → `https://fdsa-query-builder.alzheimersdata.org/qbt/`
-- `DownloadDirectory` and `DefaultDownloadDirectory` → `/downloads`
+- `DownloadDirectory` and `DefaultDownloadDirectory` → `<DOWNLOAD_DIR>`
 - Neither shows **"Superseding"**
 - `ManagedBookmarks` no longer shows **"Warning, Conflict"**
 
-**4. The actual user journey.** Run a query, click **Download Results**, and
-confirm the save dialog opens directly at `downloads` — no navigating. Then
-confirm the file is on the share:
+**4. The bookmark.** The bookmark bar should show **`Query Builder v4`** (no
+"(staging)" suffix) — confirms the right build at a glance.
+
+**5. The actual user journey.** Run a query, click **Download Results**, and
+confirm the save dialog opens directly at the shared drive — no navigating
+past `/config` first. Then confirm the file is on the share:
 
 ```bash
 find /mnt/vm-shared-storage -iname "<test filename>"
 ```
 
 It should be there and **not** under `/var/lib/docker/volumes/.../_data`.
+
+**6. Startup time.** Time how long the container took to become ready and
+compare against a known-good baseline. A sudden multi-minute startup means
+the mount is behaving like a network share under `/config`'s recursive
+chown, not local disk — see
+[README-GRIP.md](README-GRIP.md#trade-off-inside-config-vs-outside) and
+re-check the mount type before this carries production traffic.
 
 ---
 
