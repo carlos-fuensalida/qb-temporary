@@ -1,4 +1,4 @@
-# QB Container — Query Builder browser
+# QB Container — aha (production)
 
 A dedicated Chromium browser, delivered as a Docker container, that opens
 **Query Builder** and is locked to it. Users access it through their own web
@@ -11,7 +11,15 @@ browser (via the built-in noVNC web layer) — nothing to install on the client.
 - **Downloads** are saved to a mounted folder and made readable/writable to
   other users and groups automatically.
 
-Target site: `https://qbt-staging.fdsaservices.com/qbt/`
+Target site: `https://fdsa-query-builder.alzheimersdata.org/qbt/`
+
+This is the **aha** flavor: the permissions/AKS-mount fixes (see
+[Why downloads live outside `/config`](#why-downloads-live-outside-config)),
+distributed to our own registry and mirrored to AHA's own registry
+(Aridhia). It does **not** carry the `grip-*` branches' separate
+downloads-location/File-System-Access fix — `aha-*` and `grip-*` are
+different fixes for different environments, not the same code. See `main`'s
+README for the full branch map.
 
 ---
 
@@ -27,10 +35,8 @@ Target site: `https://qbt-staging.fdsaservices.com/qbt/`
 ### Option A — build and run locally
 
 ```bash
-# 1. Build the image (run from this directory)
 docker build -t qbt-kiosk .
 
-# 2. Start the container (downloads land in ./downloads for local testing)
 mkdir -p downloads
 docker run -d \
   --name=qb \
@@ -41,10 +47,7 @@ docker run -d \
   qbt-kiosk
 ```
 
-> For a real deployment, swap `$PWD/downloads` for the shared/network path,
-> e.g. `-v /files/shared/drive:/downloads:rw`.
-
-### Option B — run a prebuilt image from the registry
+### Option B — run the published image
 
 ```bash
 docker run -d \
@@ -53,54 +56,18 @@ docker run -d \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
   -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+  qbtcontainers.azurecr.io/qbtcontainer:aha
 ```
 
-### Option C — plain `docker run` with `--restart=unless-stopped`
-
-```bash
-docker build -t qbt-kiosk:latest .
-
-docker run -d \
-  --name=qb \
-  --restart=unless-stopped \
-  -p 4443:4443 \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/downloads:rw \
-  qbt-kiosk:latest
-```
-
-Or, using the prebuilt registry image instead of building locally:
-
-```bash
-docker run -d \
-  --name=qb \
-  --restart=unless-stopped \
-  -p 4443:4443 \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-```
-
-> **Note:** the downloads volume mounts at `/downloads`, not `/config/Downloads`.
-> It's kept outside `/config` on purpose — see
-> [Why downloads live outside `/config`](#why-downloads-live-outside-config) —
-> so update any existing pod/volume specs accordingly when upgrading.
+> **Note:** the downloads volume mounts at `/downloads`, not
+> `/config/Downloads` — see [Why downloads live outside `/config`](#why-downloads-live-outside-config).
 
 ---
 
 ## Open the app
 
-Browse to:
-
-```
-http://<host-ip>:4443
-```
-
-(on the same machine: <http://localhost:4443>)
-
-You'll land on Query Builder in a normal Chromium window.
-
+Browse to `http://<host-ip>:4443` (or `http://localhost:4443` on the same
+machine). You'll land on Query Builder in a normal Chromium window.
 
 ---
 
@@ -123,55 +90,47 @@ The downloads volume mounts at `/downloads`, not `/config/Downloads`, and
 Chromium is pointed at it via the `DownloadDirectory` policy in
 [policy.json](policy.json).
 
-This matters because the base image (`jlesage/chromium`) recursively `chown`s
-the entire `/config` tree to `USER_ID`/`GROUP_ID` on **every** container
-start, not just the first one. That's fine when `/config` is local disk, but
-if the mounted downloads folder is a network share (e.g. an Azure Files/CIFS
-mount, as used by the AKS automation workspaces), a recursive chown over the
-network turns into a per-file round trip — adding minutes to startup, and
-getting slower as the share fills up. Keeping the network mount outside
-`/config` means that chown only ever walks local disk, so startup stays fast
-regardless of how much is in the downloads share.
+The base image (`jlesage/chromium`) recursively `chown`s the entire
+`/config` tree to `USER_ID`/`GROUP_ID` on **every** container start. When the
+mounted downloads folder is a network share (e.g. an Azure Files/CIFS mount,
+as used by the AKS automation workspaces), that recursive chown turns into a
+per-file network round trip — adding minutes to startup, and getting slower
+as the share fills up. Keeping the network mount outside `/config` means the
+chown only ever walks local disk, so startup stays fast regardless of how
+much is in the downloads share. Full write-up, written for this production
+rollout: [README-PROD.md](README-PROD.md).
 
 Do **not** "fix" this by setting `TAKE_CONFIG_OWNERSHIP=0` — that disables
-the chown for local `/config` paths too (`xdg`, `log`, the Chromium profile),
-which need it and aren't covered by any volume's own uid/gid mount options,
-and causes a permission-denied crash loop instead.
+the chown for local `/config` paths too (`xdg`, `log`, the Chromium
+profile), which need it, and causes a permission-denied crash loop instead.
 
 ---
 
-## HOW TO: Build, tag, and push a release image
+## Build, tag, and push
 
-The registry (`qbtcontainers.azurecr.io`) hosts separate staging and prod
-images. Before building, set the target URL in **both** of these files:
+URL: `https://fdsa-query-builder.alzheimersdata.org/qbt/` (already set in
+this branch's `policy.json` and `root/defaults/Bookmarks`).
 
-- [policy.json](policy.json) — `HomepageLocation` and `RestoreOnStartupURLs`.
-- [root/defaults/Bookmarks](root/defaults/Bookmarks) — the `url` field of the
-  "Query Builder" bookmark.
-
-### Staging
-
-URL: `https://qbt-staging.fdsaservices.com/qbt/`
+### Our registry
 
 ```bash
 docker login -u read-write -p <password> qbtcontainers.azurecr.io
 
 docker build -t qbt-kiosk:latest .
-docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-docker push qbtcontainers.azurecr.io/qbtstagingcontainer:latest
+docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtcontainer:aha
+docker push qbtcontainers.azurecr.io/qbtcontainer:aha
 ```
 
-### Prod
-
-Set the URL in both files above to
-`https://fdsa-query-builder.alzheimersdata.org/qbt/`, then run the same
-commands against the prod image name:
+### AHA's registry (Aridhia)
 
 ```bash
-docker login -u read-write -p <password> qbtcontainers.azurecr.io
-
-docker build -t qbt-kiosk:latest .
-docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtcontainer:latest
-docker push qbtcontainers.azurecr.io/qbtcontainer:latest
+docker login -u read-write -p <SOURCE_REGISTRY_PASSWORD> qbtcontainers.azurecr.io
+docker pull qbtcontainers.azurecr.io/qbtcontainer:aha
+docker tag qbtcontainers.azurecr.io/qbtcontainer:aha acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt:latest
+docker login -u fdsa-qbt -p <TARGET_REGISTRY_PASSWORD> acrwesteuropeaddi.azurecr.io
+docker push acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt:latest
 ```
 
+> The Aridhia prod path (`fdsa_qbt`, no `_staging` suffix) mirrors the
+> naming convention documented for staging — confirm against Aridhia's own
+> records if this hasn't been pushed before.
