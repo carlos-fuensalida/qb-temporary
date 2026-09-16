@@ -1,125 +1,97 @@
-# QB Container — Query Builder browser
+# testing-qbt — connectivity test container
 
-This repo builds a Docker container that runs a dedicated Chromium browser
-(via [`jlesage/chromium`](https://github.com/jlesage/docker-chromium) and its
-noVNC web layer) opening **Query Builder**. Users reach it entirely through
-their own web browser — nothing to install client-side.
+This branch is **not** the Query Builder app. It's a throwaway diagnostic
+image, `nginx:alpine` serving one static page over plain HTTP on port
+`4443` (the same port grip uses), for isolating a connectivity problem from
+the app itself.
 
-**`main` holds no code.** It's the map for the six branches that do — read
-this before touching any of them.
+## When to use this
 
----
+You've `docker load`ed `grip-staging`/`grip-production`, `docker ps` shows
+the container `Up`, `curl` from the same host gets *something*, but a
+browser hitting `localhost:4443` fails (e.g. `ERR_CONNECTION_RESET`). Before
+digging further into the grip image, load and run this container instead:
 
-## The branch matrix
+- **This container also unreachable** → the problem is environmental (host
+  networking, a proxy/VPN in front of the browser, the VM's firewall, a
+  wrong "localhost" — see below), not the grip image. Stop debugging the
+  app image and debug the network path instead.
+- **This container reachable, grip is not** → the problem is inside the
+  grip image/app itself. Most likely candidate: the jlesage/chromium base
+  image serves its web UI over **HTTPS** by default (`SECURE_CONNECTION`),
+  while this test container is plain HTTP — if grip only fails on `http://`
+  but works on `https://`, that's your answer. Also check `docker logs qb`
+  and `docker exec qb sh -c "ss -tlnp"` to confirm the app inside actually
+  bound the port.
 
-There are two independent choices: **flavor** (what the container looks
-like) and **environment** (which site it targets). Six branches cover every
-combination:
+Also worth checking regardless of which container is running: confirm the
+browser making the request is running on the **exact same host** as the
+Docker daemon. In a nested remote-desktop setup, a browser one hop further
+out than expected will treat `localhost` as itself, not the docker host.
 
-| | staging (`qbt-staging.fdsaservices.com`) | production (`fdsa-query-builder.alzheimersdata.org`) |
-|---|---|---|
-| **vanilla** | [`vanilla-staging`](../../tree/vanilla-staging) | [`vanilla-production`](../../tree/vanilla-production) |
-| **aha** | [`aha-staging`](../../tree/aha-staging) | [`aha-production`](../../tree/aha-production) |
-| **grip** | [`grip-staging`](../../tree/grip-staging) | [`grip-production`](../../tree/grip-production) |
+## Step 1 — Build (on a VM with internet + Docker)
 
-### Flavors
+```bash
+git clone https://github.com/carlos-fuensalida/qb-temporary.git
+cd qb-temporary
+git checkout testing-qbt
 
-- **vanilla** — the pre-fix baseline. A stock Chromium window with a
-  "Query Builder" bookmark and homepage set, and **no lockdown policy at
-  all** (no `URLBlocklist`/`URLAllowlist` — a normal, unrestricted browser).
-  No downloads-permission fix, no AKS network-mount fix. This is a
-  historical/reference starting point, not something actively deployed.
-- **aha** — the current, fixed build (URL lockdown via `policy.json`,
-  downloads-permission-relaxing service, downloads mounted outside
-  `/config` to avoid the AKS network-mount startup slowdown). Built and
-  pushed to our own registry (`qbtcontainers.azurecr.io`), then mirrored to
-  AHA's own registry (Aridhia, `acrwesteuropeaddi.azurecr.io`) — the only
-  flavor that pushes to a second registry.
-- **grip** — the *same target site* as `aha`, and it carries `aha`'s fixes,
-  but it has its own **additional** fix on top: Query Builder's "Download
-  Results" button uses the File System Access API (not a normal browser
-  download), which was landing files inside the container's internal
-  storage instead of the shared mount. The fix (`QB_DOWNLOAD_DIR`, seeding
-  the picker's remembered directory, removing a base-image policy file that
-  was silently conflicting with `policy.json`) is `grip-*`-only — see
-  `README-GRIP.md`/`README-GRIP-PROD.md` on those branches. Distribution is
-  also different: grip's environment is air-gapped, so instead of a second
-  registry push the image is `docker save`d to a tar file and loaded
-  manually on the other side.
+docker build -t qbtcontainers.azurecr.io/qbtcontainer:testing .
+```
 
-**`aha-*` and `grip-*` are not interchangeable code** — `grip-*` is a
-superset (aha's fixes plus grip's own), not a repackaging of the same
-build. A fix made on `aha-*` still needs to be ported into `grip-*` on top
-of grip's own changes, and a `grip-*`-only fix has no reason to go to
-`aha-*` at all.
+## Step 2 — Save to a tar
 
-### Environments
+```bash
+docker save -o qbt-testing.tar qbtcontainers.azurecr.io/qbtcontainer:testing
+```
 
-Every flavor comes in `-staging` and `-production` variants, which differ in
-exactly three things:
-- `policy.json`'s `HomepageLocation` / `RestoreOnStartupURLs`
-- `root/defaults/Bookmarks`' bookmark `url` (and its `name`, e.g.
-  `Query Builder v3 (staging)` vs `Query Builder v3` — bump this on every
-  release so the bookmark bar shows what's actually running)
-- the registry/tar tag (`qbtstagingcontainer` vs `qbtcontainer`, or
-  `fdsa_qbt_staging` vs `fdsa_qbt` on Aridhia)
+This image is a few MB (`nginx:alpine`), nowhere near grip's ~1 GB — the tar
+transfer itself is not the thing being tested here.
 
----
+## Step 3 — Transfer to the air-gapped VM
 
-## Making a fix
+Same channel you already use for the grip tar.
 
-**There is no shared/templated code across branches** — each of the six
-branches is an independent copy, and `grip-*` carries `aha-*`'s fixes plus
-its own on top (see [Flavors](#flavors)). That means porting is
-direction-sensitive, not a blanket "copy everywhere":
+## Step 4 — Load on the air-gapped VM
 
-- A fix to shared/base behavior (locked to Query Builder, the permission-fix
-  service, the AKS mount-outside-`/config` fix) belongs on `aha-staging`
-  first, then ported to `aha-production` **and** into `grip-staging`/
-  `grip-production` on top of grip's own changes.
-- A fix specific to grip's downloads-location/File System Access behavior
-  belongs only on `grip-staging`, then ported to `grip-production` — it has
-  no reason to touch `aha-*`.
-- `vanilla-*` is a historical snapshot, not an active deployment — only
-  touch it if the baseline itself needs correcting, not as part of a
-  routine fix.
+```bash
+docker load -i qbt-testing.tar
+docker images | grep qbtcontainer
+```
 
-There's no tooling for this yet — `git cherry-pick` across branches works if
-the surrounding code hasn't diverged too far; otherwise it's a manual diff
-and reapply. Keep this in mind before "quickly" fixing something on one
-branch and moving on — it isn't live anywhere else until it's ported.
+## Step 5 — Run
 
-**Known outstanding issue (grip):** `chrome://policy` reports `URLAllowlist`
-— Status: **Error** on the grip build, unrelated to the downloads fix and
-never diagnosed (likely the bare `mailto`/`mailto:` entries and a duplicated
-`discover.alzheimersdata.org` entry in `policy.json`). See
-`grip-production`'s `README-GRIP-PROD.md` before that build carries real
-traffic.
+Stop the grip container first if it's holding port 4443:
 
----
+```bash
+docker rm -f qb
+```
 
-## Background / design docs
+Then run the test container on the same port:
 
-These live only here on `main` since they're not specific to any one
-branch:
+```bash
+docker run -d --name=qbt-test --restart=unless-stopped -p 4443:4443 \
+  qbtcontainers.azurecr.io/qbtcontainer:testing
+```
 
-- [`README-STAG.md`](README-STAG.md) — client-facing write-up of the
-  downloads-outside-`/config` fix (the AKS network-mount startup issue and
-  why it was fixed the way it was). The fix itself lives on `aha-*`/`grip-*`;
-  this is the incident/rationale doc.
-- [`idledetectionreport.md`](idledetectionreport.md) — notes on detecting
-  session idle time via `xprintidle`, for potential idle-timeout automation.
-  Not implemented yet.
-- [`qbcontainerstoragemultiuser.md`](qbcontainerstoragemultiuser.md) — design
-  discussion on the single-session-per-container model and what true
-  multi-user isolation would require. No decision made yet; read this before
-  someone asks "can multiple people use one container at once?".
+## Step 6 — Test
 
----
+From the **same terminal/host** as the `docker run` above:
 
-## Where this is headed
+```bash
+curl -v http://localhost:4443
+```
 
-This repo is being handed off to `alzheimersdata-org/QB-Containerized-App`,
-which will carry the same branch structure. If you're picking this project
-up, the six branches above and their individual READMEs are the working
-entry points — `main` is only ever documentation.
+Then, from the browser you were using to reach the grip container, navigate
+to `http://localhost:4443` explicitly (include the scheme).
+
+Record which of the two — curl, browser — succeeds or fails, and compare
+against the same two tests against the grip container. That comparison is
+the diagnostic; report both back.
+
+## Step 7 — Clean up
+
+```bash
+docker rm -f qbt-test
+docker run -d --name=qb ... # your original grip run command
+```
