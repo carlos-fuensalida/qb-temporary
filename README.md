@@ -1,203 +1,33 @@
-# QB Container — Query Builder browser
+# QB Container — grip (staging)
 
 A dedicated Chromium browser, delivered as a Docker container, that opens
-**Query Builder** and is locked to it. Users access it through their own web
-browser (via the built-in noVNC web layer) — nothing to install on the client.
+**Query Builder** and is locked to it, for the grip deployment. Target site:
+`https://qbt-staging.fdsaservices.com/qbt/`.
 
-- **Normal browser window** — toolbar, Home button, back/forward, reload — so a
-  user who gets stuck can recover without restarting the container.
-- **Locked down** to Query Builder + its allowed SSO/login domains via a
-  Chromium managed policy ([policy.json](policy.json)). Any other URL is blocked.
-- **Downloads** are saved to a mounted folder and made readable/writable to
-  other users and groups automatically.
+This is the **grip** flavor: it carries its own fix (not `aha-*`'s) for a
+real bug where Query Builder's "Download Results" button — which uses the
+File System Access API, not a normal browser download — was saving files
+into the container's internal storage instead of the shared mount. Root
+cause, the fix, build steps, and verification are all in
+**[README-GRIP.md](README-GRIP.md) — read that before building or deploying
+this branch.**
 
-Target site: `https://qbt-staging.fdsaservices.com/qbt/`
-
----
-
-## Prerequisites
-
-- Docker installed and running.
-- A host folder to receive downloads (e.g. a shared/network drive).
+`aha-*` and `grip-*` are different fixes for different environments, not the
+same code — see `main`'s README for the full branch map.
 
 ---
 
-## Start the app
+## Quick reference
 
-### Option A — build and run locally
-
-```bash
-# 1. Build the image (run from this directory)
-docker build -t qbt-kiosk .
-
-# 2. Start the container (downloads land in ./downloads for local testing)
-mkdir -p downloads
-docker run -d \
-  --name=qb \
-  --shm-size 2g \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -p 4443:4443 \
-  -v "$PWD/downloads:/downloads:rw" \
-  qbt-kiosk
-```
-
-> For a real deployment, swap `$PWD/downloads` for the shared/network path,
-> e.g. `-v /files/shared/drive:/downloads:rw`.
-
-### Option B — run a prebuilt image from the registry
-
-```bash
-docker run -d \
-  --name=qb \
-  --shm-size 2g \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -p 4443:4443 \
-  -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-```
-
-### Option C — plain `docker run` with `--restart=unless-stopped`
-
-```bash
-docker build -t qbt-kiosk:latest .
-
-docker run -d \
-  --name=qb \
-  --restart=unless-stopped \
-  -p 4443:4443 \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/downloads:rw \
-  qbt-kiosk:latest
-```
-
-Or, using the prebuilt registry image instead of building locally:
-
-```bash
-docker run -d \
-  --name=qb \
-  --restart=unless-stopped \
-  -p 4443:4443 \
-  -e USER_ID=10001 -e GROUP_ID=1001 \
-  -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-```
-
-> **Note:** the downloads volume mounts at `/downloads`, not `/config/Downloads`.
-> It's kept outside `/config` on purpose — see
-> [Why downloads live outside `/config`](#why-downloads-live-outside-config) —
-> so update any existing pod/volume specs accordingly when upgrading.
-
----
-
-## Open the app
-
-Browse to:
-
-```
-http://<host-ip>:4443
-```
-
-(on the same machine: <http://localhost:4443>)
-
-You'll land on Query Builder in a normal Chromium window.
-
-
----
-
-## Change the URL / allow another domain
-
-[policy.json](policy.json) is the single place to edit:
-
-1. Add the host to `URLAllowlist`.
-2. If it's the new landing page, update `HomepageLocation` and
-   `RestoreOnStartupURLs`.
-3. Rebuild the image.
-
-`URLAllowlist` entries match the host **and its subdomains**.
-
----
-
-## Why downloads live outside `/config`
-
-The downloads volume mounts at `/downloads`, not `/config/Downloads`, and
-Chromium is pointed at it via the `DownloadDirectory` policy in
-[policy.json](policy.json).
-
-This matters because the base image (`jlesage/chromium`) recursively `chown`s
-the entire `/config` tree to `USER_ID`/`GROUP_ID` on **every** container
-start, not just the first one. That's fine when `/config` is local disk, but
-if the mounted downloads folder is a network share (e.g. an Azure Files/CIFS
-mount, as used by the AKS automation workspaces), a recursive chown over the
-network turns into a per-file round trip — adding minutes to startup, and
-getting slower as the share fills up. Keeping the network mount outside
-`/config` means that chown only ever walks local disk, so startup stays fast
-regardless of how much is in the downloads share.
-
-Do **not** "fix" this by setting `TAKE_CONFIG_OWNERSHIP=0` — that disables
-the chown for local `/config` paths too (`xdg`, `log`, the Chromium profile),
-which need it and aren't covered by any volume's own uid/gid mount options,
-and causes a permission-denied crash loop instead.
-
----
-
-## Why the native file dialog's "Downloads" shortcut needed its own fix
-
-`DownloadDirectory` (above) only controls where Chromium's own *automatic*
-downloads land. It has no effect on the native GTK file-picker dialog (the
-one you get from `Ctrl+S` / "Save Page As" / "Open File") — that dialog's
-"Downloads" shortcut and default folder come from XDG user-dirs
-(`~/.config/user-dirs.dirs`), a completely separate mechanism that nothing in
-this image used to set. Left alone, it falls back to `$HOME/Downloads`
-inside `/config` — an empty, unrelated folder — instead of the shared
-`/downloads` mount.
-
-[`root/etc/cont-init.d/61-seed-downloads-dir.sh`](root/etc/cont-init.d/61-seed-downloads-dir.sh)
-fixes this on every container start by writing `XDG_DOWNLOAD_DIR=/downloads`
-into `user-dirs.dirs`, disabling `xdg-user-dirs-update` so it can't silently
-reset that back to the default, and seeding the GTK bookmarks file with a
-`/downloads` entry directly as a second safety net.
-
----
-
-## HOW TO: Build, tag, and push a release image
-
-The registry (`qbtcontainers.azurecr.io`) hosts separate staging and prod
-images. Before building, set the target URL in **both** of these files:
-
-- [policy.json](policy.json) — `HomepageLocation` and `RestoreOnStartupURLs`.
-- [root/defaults/Bookmarks](root/defaults/Bookmarks) — the `url` field of the
-  "Query Builder" bookmark.
-
-Also bump the `name` field of that same bookmark so the bookmark bar shows
-which build is running (e.g. `Query Builder v3 (staging)` vs
-`Query Builder v3` for prod, `Query Builder v4 (staging)` for the next
-release, etc.) — this is the only place the running image's version is
-visible to a user, so keep it in sync with whatever you're actually building
-and pushing below.
-
-### Staging
-
-URL: `https://qbt-staging.fdsaservices.com/qbt/`
-
-```bash
-docker login -u read-write -p <password> qbtcontainers.azurecr.io
-
-docker build -t qbt-kiosk:latest .
-docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-docker push qbtcontainers.azurecr.io/qbtstagingcontainer:latest
-```
-
-### Prod
-
-Set the URL in both files above to
-`https://fdsa-query-builder.alzheimersdata.org/qbt/`, then run the same
-commands against the prod image name:
-
-```bash
-docker login -u read-write -p <password> qbtcontainers.azurecr.io
-
-docker build -t qbt-kiosk:latest .
-docker tag qbt-kiosk:latest qbtcontainers.azurecr.io/qbtcontainer:latest
-docker push qbtcontainers.azurecr.io/qbtcontainer:latest
-```
-
+- Build/run/verify: see [README-GRIP.md](README-GRIP.md).
+- Registry: this branch is not pushed to a second registry the way `aha-*`
+  is pushed to Aridhia. Grip's environment is air-gapped — the image is
+  tagged `qbtcontainers.azurecr.io/qbtstagingcontainer:grip`, then
+  `docker save`d to a tar and transferred/loaded manually. Exact commands
+  are in README-GRIP.md's build section.
+- Known open issue: `chrome://policy` on this build reports `URLAllowlist`
+  — Status: **Error** (unrelated to the downloads fix, never diagnosed;
+  likely culprits are the bare `mailto`/`mailto:` entries and a duplicated
+  `discover.alzheimersdata.org` entry in `policy.json`). See the
+  "Known outstanding issue" section of `grip-production`'s
+  `README-GRIP-PROD.md` for detail before this carries real traffic.
