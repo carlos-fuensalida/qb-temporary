@@ -35,16 +35,23 @@ combination:
   pushed to our own registry (`qbtcontainers.azurecr.io`), then mirrored to
   AHA's own registry (Aridhia, `acrwesteuropeaddi.azurecr.io`) — the only
   flavor that pushes to a second registry.
-- **grip** — the *same* fixed code and the *same* target site as `aha`, just
-  packaged differently: grip's environment is air-gapped, so instead of a
-  second registry push the image is `docker save`d to a tar file and loaded
-  manually on the other side. No credentials/registry access needed for that
-  hop.
+- **grip** — the *same target site* as `aha`, and it carries `aha`'s fixes,
+  but it has its own **additional** fix on top: Query Builder's "Download
+  Results" button uses the File System Access API (not a normal browser
+  download), which was landing files inside the container's internal
+  storage instead of the shared mount. The fix (`QB_DOWNLOAD_DIR`, seeding
+  the picker's remembered directory, removing a base-image policy file that
+  was silently conflicting with `policy.json`) is `grip-*`-only — see
+  `README-GRIP.md`/`README-GRIP-PROD.md` on those branches. Distribution is
+  also different: grip's environment is air-gapped, so instead of a second
+  registry push the image is `docker save`d to a tar file and loaded
+  manually on the other side.
 
-`aha` and `grip` differ **only** in how the image gets distributed — the
-Dockerfile, `policy.json`, and everything under `root/` are meant to stay in
-sync between `aha-staging`/`grip-staging` and between
-`aha-production`/`grip-production`.
+**`aha-*` and `grip-*` are not interchangeable code** — `grip-*` is a
+superset (aha's fixes plus grip's own), not a repackaging of the same
+build. A fix made on `aha-*` still needs to be ported into `grip-*` on top
+of grip's own changes, and a `grip-*`-only fix has no reason to go to
+`aha-*` at all.
 
 ### Environments
 
@@ -62,14 +69,32 @@ exactly three things:
 ## Making a fix
 
 **There is no shared/templated code across branches** — each of the six
-branches is an independent copy. A fix normally starts on `aha-staging`
-(fastest to test against), then has to be **manually ported** to the other
-five branches (`aha-production`, `grip-staging`, `grip-production`, and,
-where relevant, `vanilla-staging`/`vanilla-production`). There's no
-tooling for this yet — `git cherry-pick` across branches works if the
-surrounding code hasn't diverged too far; otherwise it's a manual diff and
-reapply. Keep this in mind before "quickly" fixing something on one branch
-and moving on — it isn't live anywhere else until it's ported.
+branches is an independent copy, and `grip-*` carries `aha-*`'s fixes plus
+its own on top (see [Flavors](#flavors)). That means porting is
+direction-sensitive, not a blanket "copy everywhere":
+
+- A fix to shared/base behavior (locked to Query Builder, the permission-fix
+  service, the AKS mount-outside-`/config` fix) belongs on `aha-staging`
+  first, then ported to `aha-production` **and** into `grip-staging`/
+  `grip-production` on top of grip's own changes.
+- A fix specific to grip's downloads-location/File System Access behavior
+  belongs only on `grip-staging`, then ported to `grip-production` — it has
+  no reason to touch `aha-*`.
+- `vanilla-*` is a historical snapshot, not an active deployment — only
+  touch it if the baseline itself needs correcting, not as part of a
+  routine fix.
+
+There's no tooling for this yet — `git cherry-pick` across branches works if
+the surrounding code hasn't diverged too far; otherwise it's a manual diff
+and reapply. Keep this in mind before "quickly" fixing something on one
+branch and moving on — it isn't live anywhere else until it's ported.
+
+**Known outstanding issue (grip):** `chrome://policy` reports `URLAllowlist`
+— Status: **Error** on the grip build, unrelated to the downloads fix and
+never diagnosed (likely the bare `mailto`/`mailto:` entries and a duplicated
+`discover.alzheimersdata.org` entry in `policy.json`). See
+`grip-production`'s `README-GRIP-PROD.md` before that build carries real
+traffic.
 
 ---
 
