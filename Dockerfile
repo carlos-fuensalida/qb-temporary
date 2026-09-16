@@ -1,40 +1,22 @@
-# Query Builder browser container — normal window, locked to one place.
+# Query Builder browser container — vanilla baseline.
 #
-# A standard Chromium window (toolbar, Home button, back/forward/reload — so a
-# user can always recover) that can ONLY reach Query Builder and its allowed
-# SSO/login domains. Enforcement is a Chromium managed policy (policy.json)
-# applied at the browser engine — no proxy or firewall needed.
+# A stock Chromium window (toolbar, Home button, back/forward/reload) preset
+# with a "Query Builder" bookmark and homepage. No URL lockdown, no
+# downloads-permission fix, no AKS network-mount fix — this is the pre-fix
+# starting point the aha-*/grip-* branches build on.
 #
 # Based on the jlesage Chromium image (noVNC web layer).
 
 FROM jlesage/chromium:latest
 
-# The lockdown: a Chromium managed policy. URLBlocklist ["*"] blocks everything
-# and URLAllowlist re-permits only the QB + SSO domains, whether reached by
-# typing, a link, a redirect, or a popup. Copied to BOTH common policy paths so
-# it applies regardless of the image's Chromium package layout.
-# Verify it took effect at chrome://policy inside the session.
+# Homepage + bookmark only. No URLBlocklist/URLAllowlist here, so this is a
+# normal, unrestricted browser — see policy.json.
 COPY policy.json /etc/chromium/policies/managed/policy.json
 COPY policy.json /etc/chromium-browser/policies/managed/policy.json
 
-# Seed the "Query Builder" bookmark + install the init hook that places it,
-# plus a service that relaxes download file permissions (Chromium forces 0600).
-# Also overrides the app service's `params` file to add --test-type whenever
-# --no-sandbox is used, suppressing Chromium's "unsupported command-line flag"
-# infobar (the base image has no env var to append custom Chromium args).
+# Seed the "Query Builder" bookmark + the init hook that places it.
 COPY root/ /
-RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh \
-             /etc/services.d/fix-downloads/run \
-             /etc/services.d/app/params
-
-# Downloads live outside /config on purpose. The base image's startup init
-# recursively chowns all of /config to USER_ID/GROUP_ID on every launch; when
-# the mounted downloads volume is a network share (e.g. Azure Files/CIFS),
-# that recursive chown turns into a per-file network round trip and can add
-# minutes to container start. Keeping /downloads outside /config means that
-# chown only ever walks local disk, and downloads are redirected here via the
-# DownloadDirectory policy in policy.json.
-RUN mkdir -p /downloads
+RUN chmod +x /etc/cont-init.d/60-seed-bookmarks.sh
 
 ENV APP_NAME="Query Builder"
 ENV WEB_LISTENING_PORT="4443"
