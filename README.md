@@ -13,10 +13,12 @@ browser (via the built-in noVNC web layer) — nothing to install on the client.
 
 Target site: `https://qbt-staging.fdsaservices.com/qbt/`
 
-This is the **aha** flavor: same code as `grip-staging`, distributed to our
-own registry and mirrored to AHA's own registry (Aridhia). See
-[Build, tag, and push](#build-tag-and-push) below. For what "aha" vs "grip"
-vs "vanilla" mean, see `main`'s README.
+This is the **aha** flavor: the permissions/AKS-mount fixes, distributed to
+our own registry and mirrored to AHA's own registry (Aridhia). See
+[Build, tag, and push](#build-tag-and-push) below. It does **not** carry
+`grip-staging`'s separate downloads-location/File-System-Access fix —
+`aha-*` and `grip-*` are different fixes for different environments, not the
+same code. For what "aha" vs "grip" vs "vanilla" mean, see `main`'s README.
 
 ---
 
