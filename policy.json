@@ -1,10 +1,10 @@
 {
   "ShowHomeButton": true,
-  "HomepageLocation": "https://qbt-staging.fdsaservices.com/qbt/",
+  "HomepageLocation": "https://fdsa-query-builder.alzheimersdata.org/qbt/",
   "HomepageIsNewTabPage": false,
 
   "RestoreOnStartup": 4,
-  "RestoreOnStartupURLs": ["https://qbt-staging.fdsaservices.com/qbt/"],
+  "RestoreOnStartupURLs": ["https://fdsa-query-builder.alzheimersdata.org/qbt/"],
 
   "BookmarkBarEnabled": true,
   "ManagedBookmarks": [

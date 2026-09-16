@@ -1,5 +1,5 @@
 {
-   "checksum": "0351d130a922627f72e92dc7a27e64eb",
+   "checksum": "87bdaac9aa32ca2cd1a4909027825859",
    "roots": {
       "bookmark_bar": {
          "children": [
@@ -7,9 +7,9 @@
                "date_added": "13286954536000000",
                "guid": "1a2b3c4d-1234-4000-8000-000000000001",
                "id": "3",
-               "name": "Query Builder (staging)",
+               "name": "Query Builder",
                "type": "url",
-               "url": "https://qbt-staging.fdsaservices.com/qbt/"
+               "url": "https://fdsa-query-builder.alzheimersdata.org/qbt/"
             }
          ],
          "date_added": "13286954536000000",

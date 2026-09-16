@@ -1,29 +1,29 @@
-# QB Container — vanilla (staging)
+# QB Container — vanilla (production)
 
 The baseline Query Builder browser container, prior to any of the fixes
 carried on the `aha-*`/`grip-*` branches. A stock Chromium window (toolbar,
 Home button, back/forward, reload) preset with a "Query Builder" bookmark
-and homepage pointing at staging.
+and homepage pointing at production.
 
 **No URL lockdown.** Unlike `aha-*`/`grip-*`, there is no
 `URLBlocklist`/`URLAllowlist` — this is a normal, unrestricted browser that
 happens to open on Query Builder.
 
-Target site: `https://qbt-staging.fdsaservices.com/qbt/`
+Target site: `https://fdsa-query-builder.alzheimersdata.org/qbt/`
 
 ---
 
 ## Build & run
 
 ```bash
-docker build -t qbt-vanilla-staging .
+docker build -t qbt-vanilla-production .
 
 docker run -d \
   --name=qb \
   --shm-size 2g \
   -p 4443:4443 \
   -v /files/shared/drive:/config/Downloads:rw \
-  qbt-vanilla-staging
+  qbt-vanilla-production
 ```
 
 Browse to `http://<host-ip>:4443`.
