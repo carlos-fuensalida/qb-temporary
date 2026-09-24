@@ -20,6 +20,9 @@ same code — see `main`'s README for the full branch map.
 ## Quick reference
 
 - Build/run/verify: see [README-GRIP.md](README-GRIP.md).
+- Push to the registry, share pull credentials, and deploy as root or as a
+  specific user/group ID: see
+  [howtodeploystaging.md](howtodeploystaging.md).
 - Registry: this branch is not pushed to a second registry the way `aha-*`
   is pushed to Aridhia. Grip's environment is air-gapped — the image is
   tagged `qbtcontainers.azurecr.io/qbtstagingcontainer:grip`, then

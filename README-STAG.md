@@ -51,6 +51,7 @@ docker run -d \
   --restart=unless-stopped \
   --shm-size 2g \
   -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/downloads \
   -p 4443:4443 \
   -v /files/shared/drive:/downloads:rw \
   qbtcontainers.azurecr.io/qbtstagingcontainer:latest
@@ -59,6 +60,13 @@ docker run -d \
 Replace `/files/shared/drive` with your actual shared/network path (in AKS,
 this is the same Azure Files mount you already have — just retarget it to
 `/downloads`).
+
+`QB_DOWNLOAD_DIR` is shown explicitly above even though `/downloads` is
+already the image's default, so this command stays in sync with the GRIP
+deployment docs (which mount the share at a different path and so must set
+it) — see [howtodeploystaging.md](howtodeploystaging.md). If you mount the
+share somewhere other than `/downloads`, change both this env var and the
+`-v` target to match.
 
 Target site: `https://qbt-staging.fdsaservices.com/qbt/`
 
