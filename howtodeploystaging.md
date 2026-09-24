@@ -33,6 +33,9 @@ the push and use the `docker save`/`.tar` path in
 [README-GRIP.md](README-GRIP.md#save-to-a-tar) instead — the two delivery
 methods are alternatives, not both required.
 
+Pull credentials for the registry are sent to the client/IT team via email
+separately — not included in this document.
+
 ---
 
 ## 2. Deploying the container
