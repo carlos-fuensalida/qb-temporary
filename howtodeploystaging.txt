@@ -1,0 +1,112 @@
+HOW TO DEPLOY THE GRIP STAGING IMAGE
+=====================================
+
+This document covers pulling the grip staging image from our registry and
+the two supported ways to run the container - as root and as a specific
+user/group ID.
+
+Image:       qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+Target site: https://qbt-staging.fdsaservices.com/qbt/
+
+---------------------------------------------------------------------------
+1. PULL THE IMAGE
+---------------------------------------------------------------------------
+
+Log in to the registry using the credentials sent to you separately via
+email, then pull the image:
+
+    docker login qbtcontainers.azurecr.io -u <username> -p <password>
+    docker pull qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+
+---------------------------------------------------------------------------
+2. DEPLOYING THE CONTAINER
+---------------------------------------------------------------------------
+
+Both deployment modes below use the same image and the same downloads-mount
+choice - only USER_ID/GROUP_ID change. Pick the mount layout that matches
+your environment first:
+
+  - GRIP (share mounted inside /config): set
+    QB_DOWNLOAD_DIR=/config/Downloads and mount the share at that same
+    path.
+  - Share mounted outside /config: leave QB_DOWNLOAD_DIR unset (defaults
+    to /downloads) and mount the share at /downloads.
+
+QB_DOWNLOAD_DIR is shown explicitly below, even where it just repeats the
+default, so the value you set always matches what's mounted.
+
+--- 2a. Deploy as root ---
+
+Set USER_ID=0 GROUP_ID=0 to run the container as root. This sidesteps
+host-side file ownership questions on the mounted share entirely, at the
+cost of the container process running as root. Use this only where your
+security policy allows it.
+
+    docker run -d \
+      --name=qb \
+      --restart=unless-stopped \
+      --shm-size 2g \
+      -e USER_ID=0 -e GROUP_ID=0 \
+      -e QB_DOWNLOAD_DIR=/config/Downloads \
+      -p 4443:4443 \
+      -v /mnt/vm-shared-storage:/config/Downloads:rw \
+      qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+
+--- 2b. Deploy as a specific user/group ID ---
+
+The recommended, least-privilege option. Set USER_ID/GROUP_ID to match
+whoever owns the shared drive on your host, so downloaded files land with
+usable, non-root ownership. Run "id <username>" on the host to find the
+right values.
+
+    docker run -d \
+      --name=qb \
+      --restart=unless-stopped \
+      --shm-size 2g \
+      -e USER_ID=10001 -e GROUP_ID=1001 \
+      -e QB_DOWNLOAD_DIR=/config/Downloads \
+      -p 4443:4443 \
+      -v /mnt/vm-shared-storage:/config/Downloads:rw \
+      qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+
+For a layout where the share is mounted outside /config, swap the two
+lines above for:
+
+      -e QB_DOWNLOAD_DIR=/downloads \
+      -v /files/shared/drive:/downloads:rw \
+
+--- Removing an existing container first ---
+
+If a container named "qb" is already running (e.g. switching it from one
+mode to the other, or deploying a new pull of the image), remove it - and
+its anonymous /config volume - before running the command above:
+
+    docker rm -f -v qb
+
+The -v flag only removes the container's anonymous Docker volumes; it does
+not touch your bind-mounted shared drive.
+
+---------------------------------------------------------------------------
+3. VERIFY
+---------------------------------------------------------------------------
+
+  - Confirm the mount:
+      docker inspect qb --format '{{range .Mounts}}{{if eq .Destination "<DOWNLOAD_DIR>"}}{{.Type}}: {{.Source}} -> {{.Destination}}{{end}}{{end}}'
+    Expect "bind: <your shared path> -> <DOWNLOAD_DIR>". If it says
+    "volume" instead of "bind", the mount didn't take.
+
+  - In the browser session, open chrome://policy and check that
+    DownloadDirectory and DefaultDownloadDirectory both read
+    <DOWNLOAD_DIR>, with neither showing "Superseding".
+
+  - Run a query, click "Download Results", and confirm the save dialog
+    opens directly at the shared drive, and the downloaded file actually
+    lands there (not inside the container's internal storage).
+
+  - Check container startup time. A sudden multi-minute startup usually
+    means the mount is behaving like a network share under /config's
+    recursive ownership step, not local disk - worth investigating before
+    this carries real traffic.
+
+  - The bookmark bar should show the label for the build that's actually
+    running, as a quick visual confirmation of which image is deployed.
