@@ -1,9 +1,8 @@
 # How to Deploy the GRIP Staging Image
 
 This document covers the full loop for the **grip-staging** image: pushing
-it to our registry, handing pull credentials to the client/IT team, and the
-two supported ways to run the container — as **root** and as a **specific
-user/group ID**. It's meant to sit next to
+it to our registry and the two supported ways to run the container — as
+**root** and as a **specific user/group ID**. It's meant to sit next to
 [README-GRIP.md](README-GRIP.md) (which covers building the image and the
 downloads-location fix in detail) rather than repeat it — build there,
 deploy here.
@@ -33,51 +32,6 @@ If grip's target VM is air-gapped and can't reach the registry at all, skip
 the push and use the `docker save`/`.tar` path in
 [README-GRIP.md](README-GRIP.md#save-to-a-tar) instead — the two delivery
 methods are alternatives, not both required.
-
-### Sharing pull credentials with the client/IT team
-
-Don't hand out the ACR **admin** account (`docker login` with the registry's
-admin username/password) if you can avoid it — it grants push/delete on
-every repository in the registry, not just this image. Prefer a
-pull-scoped credential instead:
-
-```bash
-# Create a repository-scoped, pull-only token
-az acr token create \
-  --name qbt-staging-pull \
-  --registry qbtcontainers \
-  --repository qbtstagingcontainer content/read \
-  --output table
-```
-
-This prints a `username` (the token name) and a `password` (one of two
-generated passwords — `password1`/`password2` let you rotate one while the
-other stays live). Send the client/IT team:
-
-- **Registry:** `qbtcontainers.azurecr.io`
-- **Username:** the token name (e.g. `qbt-staging-pull`)
-- **Password:** the generated token password
-- **Image:** `qbtcontainers.azurecr.io/qbtstagingcontainer:grip`
-
-They pull with:
-
-```bash
-docker login qbtcontainers.azurecr.io -u qbt-staging-pull -p '<token password>'
-docker pull qbtcontainers.azurecr.io/qbtstagingcontainer:grip
-```
-
-Send credentials through a secrets channel (password manager, encrypted
-note), never in plain email/chat. If the ACR admin account is genuinely the
-only option available (e.g. anonymous pull isn't enabled and tokens aren't
-set up on this registry), that's a registry-config question to raise before
-handing out an account with push/delete rights — not something to route
-around by pasting the admin password into this doc.
-
-To revoke access later, disable or delete the token:
-
-```bash
-az acr token delete --name qbt-staging-pull --registry qbtcontainers
-```
 
 ---
 
