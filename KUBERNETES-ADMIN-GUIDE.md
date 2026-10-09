@@ -19,8 +19,6 @@ land in the wrong place, even with the v4 image:
 | Staging | `grip-staging` | `Query Builder v4 (staging)` |
 | Production | `grip-production` | `Query Builder v4` |
 
-- Do **not** build from `aha-staging` / `aha-production` (lowercase). Those
-  branches do not contain the download fix.
 - Do not build from `claude/downloads-folder-location-imjnz1` or
   `claude/grip-prod-image`. They are older (v3).
 - **Give every build a unique tag** (for example `:grip-v4-20261009`), or
