@@ -19,8 +19,6 @@ land in the wrong place, even with the v4 image:
 | Staging | `grip-staging` | `Query Builder v4 (staging)` |
 | Production | `grip-production` | `Query Builder v4` |
 
-- Do not build from `claude/downloads-folder-location-imjnz1` or
-  `claude/grip-prod-image`. They are older (v3).
 - **Give every build a unique tag** (for example `:grip-v4-20261009`), or
   deploy by digest. Re-using `:grip` lets a node keep serving a cached old
   image when `imagePullPolicy: IfNotPresent`. If you must re-use a tag, set
@@ -132,14 +130,6 @@ In the browser session:
   show `<DIR>`, with no "Superseding" status.
 - Run a query, click **Download Results**, and confirm the save dialog opens
   at the shared drive. Then confirm the file is on the share.
-
-## Known issue (unrelated to downloads)
-
-`chrome://policy` reports `URLAllowlist: Error` on the grip build, probably
-from the bare `mailto` / `mailto:` entries or a duplicated
-`https://discover.alzheimersdata.org` line in `policy.json`. The lockdown may
-not be fully enforced until this is fixed. Raise it with the image
-maintainers before production traffic.
 
 ## If it still lands in the wrong place
 
