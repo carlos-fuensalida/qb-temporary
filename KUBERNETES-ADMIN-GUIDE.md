@@ -1,12 +1,12 @@
-# Query Builder (v4) container — Kubernetes deployment notes for cluster admins
+# Query Builder (v5) container — Kubernetes deployment notes for cluster admins
 
 **Purpose:** make the "Download Results" button in Query Builder save to the
 shared file system, not into the container's own `/config` storage.
 
 Three settings must all be right. If any one is missing, downloads silently
-land in the wrong place, even with the v4 image:
+land in the wrong place, even with an older image:
 
-1. The **correct v4 image** is the one actually running.
+1. The **correct v5 image** is the one actually running.
 2. The pod sets **`QB_DOWNLOAD_DIR`** to the path where the share is mounted.
 3. The pod starts with a **fresh `/config`** (no profile left from an earlier run).
 
@@ -16,10 +16,10 @@ land in the wrong place, even with the v4 image:
 
 | Environment | Source branch | Bookmark label shown in the browser |
 |---|---|---|
-| Staging | `grip-staging` | `Query Builder v4 (staging)` |
-| Production | `grip-production` | `Query Builder v4` |
+| Staging | `grip-staging` | `Query Builder v5 (staging)` |
+| Production | `grip-production` | `Query Builder v5` |
 
-- **Give every build a unique tag** (for example `:grip-v4-20261009`), or
+- **Give every build a unique tag** (for example `:grip-v5-20261013`), or
   deploy by digest. Re-using `:grip` lets a node keep serving a cached old
   image when `imagePullPolicy: IfNotPresent`. If you must re-use a tag, set
   `imagePullPolicy: Always`.
@@ -122,10 +122,18 @@ kubectl exec <pod> -- ls /etc/chromium/policies/managed/
 #   expect: policy.json only
 ```
 
+Then confirm Chromium kept the save-dialog seed (about 30 seconds after the pod starts):
+
+```bash
+kubectl exec <pod> -- sh -c 'tr "," "\n" < /config/chromium/Default/Preferences | grep -A1 file_system_last_picked_directory'
+#   expect: an entry naming the Query Builder origin and <DIR>
+#   ends in {} => the image is older than v5 (seed discarded)
+```
+
 In the browser session:
 
-- The bookmark bar shows **`Query Builder v4`** (or `... v4 (staging)`).
-  A `v3` label means the old image is running.
+- The bookmark bar shows **`Query Builder v5`** (or `... v5 (staging)`).
+  Any older label (v4 or below) means the old image is running, and it discards the save-dialog seed.
 - `chrome://policy`: `DownloadDirectory` and `DefaultDownloadDirectory` both
   show `<DIR>`, with no "Superseding" status.
 - Run a query, click **Download Results**, and confirm the save dialog opens
