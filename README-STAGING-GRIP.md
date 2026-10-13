@@ -413,13 +413,3 @@ running without opening `chrome://policy`. See
 - The bookmark bar shows the label for the build that's actually running.
 
 ---
-
-## Known issue (unrelated to downloads)
-
-`chrome://policy` on this build reports `URLAllowlist` — Status: **Error**.
-Part of the allowlist is rejected by Chromium, probably the bare `mailto` /
-`mailto:` entries or the duplicated `https://discover.alzheimersdata.org`
-entry in `policy.json`. It was never diagnosed, because changing lockdown
-rules on a guess is what caused the original problem. To diagnose, open
-`chrome://policy`, expand the `URLAllowlist` row and read the specific error
-before this build carries real traffic.
