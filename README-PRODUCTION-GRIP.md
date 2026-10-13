@@ -1,8 +1,19 @@
-# Query Builder Container — GRIP Downloads-Location Fix
+# Query Builder Container — GRIP Production
 
-This document is for the developer deploying the fixed image to the GRIP
-environment. It covers the issue that was reported, what changed, and the
-exact steps to load and run the new image from a `.tar` file.
+| | |
+|---|---|
+| Target site | `https://fdsa-query-builder.alzheimersdata.org/qbt/` |
+| Branch | `grip-production` |
+| Image tag | `qbtcontainers.azurecr.io/qbtcontainer:grip` |
+| Bookmark label | `Query Builder v5` |
+| Delivery | `docker save` → `.tar` → air-gapped VM |
+
+A dedicated Chromium browser, delivered as a Docker container, that opens
+**Query Builder** and is locked to it. This is the only README for this
+branch. It covers the downloads-location problem that was reported, the fix,
+and how to build, deliver, deploy and verify the production image. Read the
+[Known issue](#known-issue--read-before-going-live) before it carries real
+traffic.
 
 ---
 
@@ -131,8 +142,8 @@ docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtcontainer:grip \
 ```
 
 Expect `fdsa-query-builder.alzheimersdata.org`. Seeing
-`qbt-staging.fdsaservices.com` means the staging branch (`grip-staging`) was
-cloned by mistake.
+`qbt-staging.fdsaservices.com` means the wrong branch was
+built (this document is for `grip-production`).
 
 ### Save to a `.tar`
 
@@ -177,8 +188,7 @@ at all. But the base image recursively `chown`s the whole of `/config` on
 **every** container start. If the share is a network filesystem (Azure
 Files/CIFS), that becomes a per-file network round trip and can add minutes
 to startup, getting worse as the share fills — the exact problem
-that was fixed for the AKS workspaces by moving the mount outside `/config`
-(see `README-STAG.md` on the `main` branch).
+that was fixed for the AKS workspaces by moving the mount outside `/config`.
 
 So:
 
@@ -274,6 +284,17 @@ different directories on Linux.
 
 Adjust `/mnt/vm-shared-storage` only if this VM's shared-storage path
 differs — keep the `:/downloads:rw` side exactly as-is.
+
+**Before running this on the production VM, check:**
+
+1. `/mnt/vm-shared-storage` is the share path used in these examples — confirm
+   the production VM's actual path.
+2. The mount target and `QB_DOWNLOAD_DIR` are **the same path**, and it is
+   **case-sensitive**: `/config/Downloads` ≠ `/config/downloads`.
+3. `USER_ID`/`GROUP_ID` match the owner of the production share, so downloaded
+   files land with usable ownership (`id <username>` on the host).
+4. If the share is a large network filesystem, see
+   [Trade-off: inside `/config` vs outside](#trade-off-inside-config-vs-outside).
 
 Steps 4-7 below use `<DOWNLOAD_DIR>` as a placeholder — substitute whatever
 you set `QB_DOWNLOAD_DIR` to above (`/config/Downloads` for GRIP,
@@ -371,3 +392,30 @@ running without opening `chrome://policy`. See
   manual-save path changes.
 - Container startup time is unchanged from before this fix.
 - The bookmark bar shows the label for the build that's actually running.
+
+---
+
+## Known issue — read before going live
+
+`chrome://policy` on this build reports **`URLAllowlist` — Status: Error**,
+meaning part of the allowlist is being rejected by Chromium. This is unrelated
+to the downloads work and was never diagnosed, because changing lockdown rules
+on a guess is what caused the original problem.
+
+It matters more in production: a partially-rejected allowlist means the URL
+lockdown may not be enforcing everything it appears to. Likely culprits in
+`policy.json` are the bare `mailto` / `mailto:` entries (not valid URL
+patterns) and the duplicated `https://discover.alzheimersdata.org` entry.
+
+To diagnose: open `chrome://policy`, expand the `URLAllowlist` row, and read
+the specific error. Worth resolving before this image carries production
+traffic.
+
+---
+
+## Note on the bookmark checksum
+
+`root/defaults/Bookmarks` contains a `checksum` field that is **not** updated
+when the URL or name changes. Chromium tolerates the mismatch and the bookmark
+renders correctly, so no action is needed; just don't be alarmed by the stale
+value.
