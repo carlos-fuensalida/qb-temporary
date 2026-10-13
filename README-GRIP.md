@@ -100,7 +100,7 @@ Build on a VM with internet access and Docker. No registry login is needed —
 the tag is only a name, and it's only required if you later choose to push.
 
 ```bash
-git clone -b claude/downloads-folder-location-imjnz1 \
+git clone -b grip-staging \
   https://github.com/carlos-fuensalida/qb-temporary.git
 cd qb-temporary
 
@@ -132,7 +132,7 @@ docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtstagingcontainer:gri
 
 Expect `qbt-staging.fdsaservices.com`. Seeing
 `fdsa-query-builder.alzheimersdata.org` means the production branch
-(`claude/grip-prod-image`) was cloned by mistake.
+(`grip-production`) was cloned by mistake.
 
 ### Save to a `.tar`
 
