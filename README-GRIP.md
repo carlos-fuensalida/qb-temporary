@@ -100,11 +100,11 @@ Build on a VM with internet access and Docker. No registry login is needed —
 the tag is only a name, and it's only required if you later choose to push.
 
 ```bash
-git clone -b grip-staging \
+git clone -b grip-production \
   https://github.com/carlos-fuensalida/qb-temporary.git
 cd qb-temporary
 
-docker build -t qbtcontainers.azurecr.io/qbtstagingcontainer:grip .
+docker build -t qbtcontainers.azurecr.io/qbtcontainer:grip .
 ```
 
 ### Post-build checks — run both
@@ -115,7 +115,7 @@ up after a ~1 GB transfer to the target VM.
 **1. The base image's conflicting policy files are gone:**
 
 ```bash
-docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtstagingcontainer:grip \
+docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtcontainer:grip \
   -c 'ls /etc/chromium/policies/managed/'
 ```
 
@@ -123,27 +123,27 @@ Expect **only** `policy.json`. If `managed_policies.json` or
 `managed_policies.json.bk` appear, the `rm -f` layer didn't run and the
 download-location bug is still present.
 
-**2. The staging URL was baked in, not production:**
+**2. The production URL was baked in, not staging:**
 
 ```bash
-docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtstagingcontainer:grip \
+docker run --rm --entrypoint sh qbtcontainers.azurecr.io/qbtcontainer:grip \
   -c 'grep -E "HomepageLocation|RestoreOnStartupURLs" /etc/chromium/policies/managed/policy.json'
 ```
 
-Expect `qbt-staging.fdsaservices.com`. Seeing
-`fdsa-query-builder.alzheimersdata.org` means the production branch
-(`grip-production`) was cloned by mistake.
+Expect `fdsa-query-builder.alzheimersdata.org`. Seeing
+`qbt-staging.fdsaservices.com` means the staging branch (`grip-staging`) was
+cloned by mistake.
 
 ### Save to a `.tar`
 
 ```bash
-docker save -o qbt-grip.tar qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+docker save -o qbt-grip.tar qbtcontainers.azurecr.io/qbtcontainer:grip
 ```
 
 Or compressed, to cut transfer size:
 
 ```bash
-docker save qbtcontainers.azurecr.io/qbtstagingcontainer:grip | gzip > qbt-grip.tar.gz
+docker save qbtcontainers.azurecr.io/qbtcontainer:grip | gzip > qbt-grip.tar.gz
 ```
 
 Then transfer it to the target VM by whatever channel you already use.
@@ -210,7 +210,7 @@ Confirm it's there:
 docker images | grep grip
 ```
 
-You should see `qbtcontainers.azurecr.io/qbtstagingcontainer   grip   ...`.
+You should see `qbtcontainers.azurecr.io/qbtcontainer   grip   ...`.
 
 ### 2. Remove the currently running container and its `/config` volume
 
@@ -251,7 +251,7 @@ docker run -d \
   -e QB_DOWNLOAD_DIR=/config/Downloads \
   -p 4443:4443 \
   -v /mnt/vm-shared-storage:/config/Downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+  qbtcontainers.azurecr.io/qbtcontainer:grip
 ```
 
 **AKS automation workspaces — share mounted outside `/config`** (the
@@ -265,7 +265,7 @@ docker run -d \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
   -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+  qbtcontainers.azurecr.io/qbtcontainer:grip
 ```
 
 The mount target and `QB_DOWNLOAD_DIR` must be **the same path**, and the
