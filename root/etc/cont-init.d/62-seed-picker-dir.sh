@@ -25,6 +25,14 @@
 # worth the risk of corrupting a live profile — and an existing profile has
 # already remembered a directory of its own anyway.
 #
+# The "First Run" marker below is what makes the seed survive. Verified on
+# Chromium 152: with no marker, Chromium treats the first launch of a profile
+# as a first run and rewrites Preferences, leaving
+# file_system_last_picked_directory empty ({}) — the seed is silently
+# discarded and the dialog opens at /config again. Creating the marker first
+# keeps the entry. (A seed written into a profile that has already launched
+# once also survives, which is why this looked like it worked on restarts.)
+#
 # NOTE: this only takes effect on a fresh /config. A container recreated
 # against an existing /config volume keeps whatever that profile already
 # remembered — see README-GRIP.md for the `docker rm -f -v` step.
@@ -52,6 +60,8 @@ TIMESTAMP="13431206074976105"
 ENTRY='{"last_modified":"'"$LAST_MODIFIED"'","setting":{"default-id":{"display-name":"downloads","path":"'"$DOWNLOAD_DIR"'","path-type":0,"timestamp":"'"$TIMESTAMP"'"}}}'
 
 mkdir -p "$PROFILE_DIR"
+# See the "First Run" note above — without this the seed is erased on launch.
+touch /config/chromium/"First Run"
 cat > "$PREFS" <<EOF
 {"profile":{"content_settings":{"exceptions":{"file_system_last_picked_directory":{"https://qbt-staging.fdsaservices.com:443,*":$ENTRY,"https://fdsa-query-builder.alzheimersdata.org:443,*":$ENTRY,"https://qbt-pre-prod.fdsaservices.com:443,*":$ENTRY}}}}}
 EOF

@@ -76,6 +76,15 @@ memory with the configured downloads directory before Chromium first
 launches, for every Query Builder origin this image is used against. A brand new container then behaves
 as though a user had already saved there once.
 
+> **Why the script also creates Chromium's `First Run` marker.** Testing
+> against Chromium 152 showed that a seed written into a brand-new profile is
+> erased on its first launch: Chromium rewrites `Preferences` and leaves
+> `file_system_last_picked_directory` empty (`{}`), so the dialog still
+> opened at `/config` even though the log said "seeded". Creating
+> `/config/chromium/First Run` before launch makes the entry survive. Earlier
+> versions of this image (up to v4) lacked that line, which is why the fix
+> appeared not to work on fresh containers.
+
 > **This only applies to a fresh profile.** The script deliberately does not
 > touch an existing `Preferences` file — editing nested JSON in a live
 > profile without a JSON parser (the image has no `jq` or `python`) risks
@@ -308,6 +317,17 @@ Expect `[set-download-dir] downloads directory is <DOWNLOAD_DIR>` and
 *"already exists; leaving the profile alone"*, the old `/config` volume was
 reused — redo step 2 with `-v`.
 
+The log line only proves the seed was *written*. Confirm Chromium *kept* it
+(wait about 30 seconds after the container starts):
+
+```bash
+docker exec qb sh -c 'tr "," "\n" < /config/chromium/Default/Preferences | grep -A1 file_system_last_picked_directory'
+```
+
+Expect the key followed by an entry naming the Query Builder origin and
+`<DOWNLOAD_DIR>`. If it ends in `{}`, the seed was discarded — the image is
+missing the `First Run` fix.
+
 ### 7. Verify the actual fix
 
 Open `http://<host-ip>:4443`. Run a query, click **Download Results**, and
@@ -334,7 +354,7 @@ above; stop and re-check the mount type rather than shipping it.
 ### 9. Confirm the bookmark label
 
 The bookmark bar should show the label for whichever build this is (e.g.
-`Query Builder v4 (staging)`) — a quick way to confirm the right image is
+`Query Builder v5 (staging)`) — a quick way to confirm the right image is
 running without opening `chrome://policy`. See
 [root/defaults/Bookmarks](root/defaults/Bookmarks).
 

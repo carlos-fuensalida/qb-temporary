@@ -99,6 +99,12 @@ not touch your bind-mounted shared drive.
     DownloadDirectory and DefaultDownloadDirectory both read
     <DOWNLOAD_DIR>, with neither showing "Superseding".
 
+  - Confirm the picker seed was KEPT (wait ~30 seconds after start):
+      docker exec qb sh -c 'tr "," "\n" < /config/chromium/Default/Preferences | grep -A1 file_system_last_picked_directory'
+    Expect an entry naming the Query Builder origin and <DOWNLOAD_DIR>.
+    If it ends in "{}", the seed was discarded - this image is missing the
+    "First Run" fix (build v5 or later).
+
   - Run a query, click "Download Results", and confirm the save dialog
     opens directly at the shared drive, and the downloaded file actually
     lands there (not inside the container's internal storage).

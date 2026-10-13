@@ -129,6 +129,6 @@ touch the bind-mounted shared drive.
 Use the verification steps in
 [README-GRIP.md — How to verify](README-GRIP.md#how-to-verify) and the
 numbered checks in its "Deploying" section (mount type, policy conflict
-gone, picker seed applied, actual download lands on the shared drive,
+gone, picker seed applied and kept, actual download lands on the shared drive,
 startup time, bookmark label) — they apply the same way regardless of
 whether the container is running as root or as a mapped user/group ID.
