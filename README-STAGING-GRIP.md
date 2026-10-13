@@ -1,8 +1,17 @@
-# Query Builder Container — GRIP Downloads-Location Fix
+# Query Builder Container — GRIP Staging
 
-This document is for the developer deploying the fixed image to the GRIP
-environment. It covers the issue that was reported, what changed, and the
-exact steps to load and run the new image from a `.tar` file.
+| | |
+|---|---|
+| Target site | `https://qbt-staging.fdsaservices.com/qbt/` |
+| Branch | `grip-staging` |
+| Image tag | `qbtcontainers.azurecr.io/qbtstagingcontainer:grip` |
+| Bookmark label | `Query Builder v5 (staging)` |
+| Delivery | `docker save` → `.tar` → air-gapped VM, or registry pull |
+
+A dedicated Chromium browser, delivered as a Docker container, that opens
+**Query Builder** and is locked to it. This is the only README for this
+branch. It covers the downloads-location problem that was reported, the fix,
+and how to build, deliver, deploy and verify the image.
 
 ---
 
@@ -150,6 +159,30 @@ Then transfer it to the target VM by whatever channel you already use.
 
 ---
 
+## Alternative delivery: the registry
+
+If the target VM can reach the registry, skip the `.tar` and push/pull instead.
+The two delivery methods are alternatives; only one is needed.
+
+Push (from the build machine):
+
+```bash
+docker login qbtcontainers.azurecr.io
+docker push qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+```
+
+Pull (on the target VM) with the credentials sent separately by email:
+
+```bash
+docker login qbtcontainers.azurecr.io -u <username> -p <password>
+docker pull qbtcontainers.azurecr.io/qbtstagingcontainer:grip
+```
+
+Always `docker pull` again when the tag has been re-pushed, otherwise the host
+keeps serving its cached older image. Check the bookmark label afterwards.
+
+---
+
 ## Choosing where downloads go
 
 `QB_DOWNLOAD_DIR` (default `/downloads`) is the single place this is
@@ -177,8 +210,7 @@ at all. But the base image recursively `chown`s the whole of `/config` on
 **every** container start. If the share is a network filesystem (Azure
 Files/CIFS), that becomes a per-file network round trip and can add minutes
 to startup, getting worse as the share fills — the exact problem
-[README-STAG.md](README-STAG.md) documents moving *away* from for the AKS
-workspaces.
+that was fixed for the AKS workspaces by moving the mount outside `/config`.
 
 So:
 
@@ -274,6 +306,14 @@ different directories on Linux.
 
 Adjust `/mnt/vm-shared-storage` only if this VM's shared-storage path
 differs — keep the `:/downloads:rw` side exactly as-is.
+
+**Running as root instead.** To run the container with root's numeric IDs,
+use `-e USER_ID=0 -e GROUP_ID=0` in place of `10001`/`1001`. This avoids
+host-side ownership questions on the share, at the cost of the container
+process running as root, so use it only where the VM's security policy
+allows. Everything else in the command is unchanged. `10001`/`1001` are the
+values already in use on the GRIP staging VM; run `id <username>` on the host
+to confirm them before reusing them elsewhere.
 
 Steps 4-7 below use `<DOWNLOAD_DIR>` as a placeholder — substitute whatever
 you set `QB_DOWNLOAD_DIR` to above (`/config/Downloads` for GRIP,
@@ -371,3 +411,15 @@ running without opening `chrome://policy`. See
   manual-save path changes.
 - Container startup time is unchanged from before this fix.
 - The bookmark bar shows the label for the build that's actually running.
+
+---
+
+## Known issue (unrelated to downloads)
+
+`chrome://policy` on this build reports `URLAllowlist` — Status: **Error**.
+Part of the allowlist is rejected by Chromium, probably the bare `mailto` /
+`mailto:` entries or the duplicated `https://discover.alzheimersdata.org`
+entry in `policy.json`. It was never diagnosed, because changing lockdown
+rules on a guess is what caused the original problem. To diagnose, open
+`chrome://policy`, expand the `URLAllowlist` row and read the specific error
+before this build carries real traffic.

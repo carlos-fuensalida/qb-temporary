@@ -35,7 +35,7 @@
 #
 # NOTE: this only takes effect on a fresh /config. A container recreated
 # against an existing /config volume keeps whatever that profile already
-# remembered — see README-GRIP.md for the `docker rm -f -v` step.
+# remembered — see README-STAGING-GRIP.md for the `docker rm -f -v` step.
 
 PROFILE_DIR=/config/chromium/Default
 PREFS="$PROFILE_DIR/Preferences"
@@ -55,7 +55,7 @@ LAST_MODIFIED="13431206074976115"
 TIMESTAMP="13431206074976105"
 
 # Every origin this image is pointed at across environments. Listing them all
-# keeps this file out of the per-environment edit list in README.md — one
+# keeps this file out of the per-environment edit list in README-STAGING-GRIP.md — one
 # image behaves correctly whichever URL policy.json is built for.
 ENTRY='{"last_modified":"'"$LAST_MODIFIED"'","setting":{"default-id":{"display-name":"downloads","path":"'"$DOWNLOAD_DIR"'","path-type":0,"timestamp":"'"$TIMESTAMP"'"}}}'
 
