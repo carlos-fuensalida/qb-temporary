@@ -31,6 +31,6 @@ same code — see `main`'s README for the full branch map.
 - Known open issue: `chrome://policy` on this build reports `URLAllowlist`
   — Status: **Error** (unrelated to the downloads fix, never diagnosed;
   likely culprits are the bare `mailto`/`mailto:` entries and a duplicated
-  `discover.alzheimersdata.org` entry in `policy.json`). See the
-  "Known outstanding issue" section of `grip-production`'s
-  `README-GRIP-PROD.md` for detail before this carries real traffic.
+  `discover.alzheimersdata.org` entry in `policy.json`). To
+  diagnose, open `chrome://policy`, expand the `URLAllowlist` row and read
+  the specific error before this carries real traffic.
