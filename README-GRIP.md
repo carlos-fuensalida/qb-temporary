@@ -177,8 +177,8 @@ at all. But the base image recursively `chown`s the whole of `/config` on
 **every** container start. If the share is a network filesystem (Azure
 Files/CIFS), that becomes a per-file network round trip and can add minutes
 to startup, getting worse as the share fills — the exact problem
-[README-STAG.md](README-STAG.md) documents moving *away* from for the AKS
-workspaces.
+that was fixed for the AKS workspaces by moving the mount outside `/config`
+(see `README-STAG.md` on the `main` branch).
 
 So:
 
