@@ -1,7 +1,7 @@
 # Query Builder Container — GRIP Production Image
 
 Build and delivery runbook for the **production** GRIP image. This branch
-(`claude/grip-prod-image`) is the staging GRIP branch with the target URL
+(`grip-production`) is the staging GRIP branch with the target URL
 switched to production — it carries every downloads-location fix described in
 [README-GRIP.md](README-GRIP.md).
 
@@ -9,7 +9,7 @@ switched to production — it carries every downloads-location fix described in
 |---|---|
 | Target site | `https://fdsa-query-builder.alzheimersdata.org/qbt/` |
 | Image tag | `qbtcontainers.azurecr.io/qbtcontainer:grip` |
-| Bookmark label | `Query Builder v4` (no "(staging)" suffix) |
+| Bookmark label | `Query Builder v5` (no "(staging)" suffix) |
 | Delivery | `docker save` → `.tar` → air-gapped VM |
 
 ---
@@ -25,7 +25,7 @@ identical.
 | `policy.json` → `HomepageLocation` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
 | `policy.json` → `RestoreOnStartupURLs` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
 | `root/defaults/Bookmarks` → `url` | `qbt-staging.fdsaservices.com` | `fdsa-query-builder.alzheimersdata.org` |
-| `root/defaults/Bookmarks` → `name` | `Query Builder v4 (staging)` | `Query Builder v4` |
+| `root/defaults/Bookmarks` → `name` | `Query Builder v5 (staging)` | `Query Builder v5` |
 
 The production host was already present in `URLAllowlist`, and
 `62-seed-picker-dir.sh` already seeds the production origin
@@ -39,7 +39,7 @@ change.
 ```bash
 git clone https://github.com/carlos-fuensalida/qb-temporary.git
 cd qb-temporary
-git checkout claude/grip-prod-image
+git checkout grip-production
 
 docker build -t qbtcontainers.azurecr.io/qbtcontainer:grip .
 ```
@@ -173,6 +173,18 @@ Expect `[set-download-dir] downloads directory is <DOWNLOAD_DIR>` and
 *"already exists; leaving the profile alone"*, the old volume was reused —
 redo step 5 with `-v`.
 
+That line only proves the seed was *written*. Confirm Chromium *kept* it
+(wait about 30 seconds after the container starts):
+
+```bash
+docker exec qb sh -c 'tr "," "\n" < /config/chromium/Default/Preferences | grep -A1 file_system_last_picked_directory'
+```
+
+Expect the key followed by an entry naming
+`https://fdsa-query-builder.alzheimersdata.org:443` and `<DOWNLOAD_DIR>`. If
+it ends in `{}`, Chromium discarded the seed — the image is missing the
+`First Run` fix (see [README-GRIP.md](README-GRIP.md)); build v5 or later.
+
 **3. Policy is clean.** Open `chrome://policy` in the session:
 
 - `HomepageLocation` → `https://fdsa-query-builder.alzheimersdata.org/qbt/`
@@ -180,7 +192,7 @@ redo step 5 with `-v`.
 - Neither shows **"Superseding"**
 - `ManagedBookmarks` no longer shows **"Warning, Conflict"**
 
-**4. The bookmark.** The bookmark bar should show **`Query Builder v4`** (no
+**4. The bookmark.** The bookmark bar should show **`Query Builder v5`** (no
 "(staging)" suffix) — confirms the right build at a glance.
 
 **5. The actual user journey.** Run a query, click **Download Results**, and
