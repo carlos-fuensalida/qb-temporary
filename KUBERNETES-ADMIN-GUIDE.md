@@ -4,8 +4,8 @@
 shared file system, not into the container's own `/config` storage, and make
 the file-upload dialog open at the share too.
 
-Three settings must all be right. If any one is missing, downloads silently
-land in the wrong place, even with an older image:
+Three settings must all be right. If any one is missing, downloads and uploads
+silently go to the wrong place:
 
 1. The **correct v6 image** is the one actually running.
 2. The pod sets **`QB_DOWNLOAD_DIR`** to the path where the share is mounted.
@@ -20,10 +20,13 @@ land in the wrong place, even with an older image:
 | Staging | `grip-staging` | `Query Builder v6 (staging)` |
 | Production | `grip-production` | `Query Builder v6` |
 
-- **Give every build a unique tag** (for example `:grip-v6-20261016`), or
-  deploy by digest. Re-using `:grip` lets a node keep serving a cached old
-  image when `imagePullPolicy: IfNotPresent`. If you must re-use a tag, set
-  `imagePullPolicy: Always`.
+- Staging image: `qbtcontainers.azurecr.io/qbtstagingcontainergrip:latest`
+- Production image: `qbtcontainers.azurecr.io/qbtcontainergrip:latest`
+- The images are tagged `:latest`, so set `imagePullPolicy: Always` (or leave
+  it unset: Kubernetes then defaults to `Always` for `:latest`). With
+  `IfNotPresent`, a node keeps serving a cached old image after a new push.
+  After a new push, run `kubectl rollout restart deployment/qb` so the pods
+  pull it, or deploy by digest to pin an exact build.
 - Air-gapped clusters: `docker load` the tar, retag, and push it to the
   internal registry. The Deployment must reference that internal tag.
 
@@ -57,8 +60,9 @@ acceptable here because users sign in again through SSO.
 
 ## Example Deployment (share outside `/config`)
 
-Replace the placeholders: `<REGISTRY>`, `<TAG>`, `<PVC_OR_SHARE>`, and the
-IDs (they should match the owner of the share).
+Replace the placeholders: `<PVC_OR_SHARE>` and the IDs (they should match
+the owner of the share). The example uses the production image; use the
+staging image name on staging.
 
 ```yaml
 apiVersion: apps/v1
@@ -75,8 +79,9 @@ spec:
     spec:
       containers:
         - name: qb
-          image: <REGISTRY>/qbtcontainer:<TAG>   # unique tag, see section 1
-          imagePullPolicy: IfNotPresent          # use Always if the tag is re-used
+          # production image; on staging use qbtstagingcontainergrip
+          image: qbtcontainers.azurecr.io/qbtcontainergrip:latest
+          imagePullPolicy: Always   # the tag is :latest, see section 1
           ports:
             - containerPort: 4443
           env:
