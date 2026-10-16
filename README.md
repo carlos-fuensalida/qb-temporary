@@ -41,8 +41,9 @@ combination:
   download), which was landing files inside the container's internal
   storage instead of the shared mount. The fix (`QB_DOWNLOAD_DIR`, seeding
   the picker's remembered directory, removing a base-image policy file that
-  was silently conflicting with `policy.json`) is `grip-*`-only — see
-  `README-GRIP.md`/`README-GRIP-PROD.md` on those branches. Distribution is
+  was silently conflicting with `policy.json`) is `grip-*`-only. The branch
+  READMEs (`README-STAGING-GRIP.md` / `README-PRODUCTION-GRIP.md`) give the
+  image name and the `docker run` command. Distribution is
   also different: grip's environment is air-gapped, so instead of a second
   registry push the image is `docker save`d to a tar file and loaded
   manually on the other side.
@@ -61,8 +62,10 @@ exactly three things:
 - `root/defaults/Bookmarks`' bookmark `url` (and its `name`, e.g.
   `Query Builder v3 (staging)` vs `Query Builder v3` — bump this on every
   release so the bookmark bar shows what's actually running)
-- the registry/tar tag (`qbtstagingcontainer` vs `qbtcontainer`, or
-  `fdsa_qbt_staging` vs `fdsa_qbt` on Aridhia)
+- the image name used for the registry/tar: grip uses
+  `qbtstagingcontainergrip:latest` vs `qbtcontainergrip:latest`; the other
+  flavors name theirs in their branch READMEs (Aridhia uses
+  `fdsa_qbt_staging` vs `fdsa_qbt`)
 
 ---
 
@@ -92,9 +95,9 @@ branch and moving on — it isn't live anywhere else until it's ported.
 **Known outstanding issue (grip):** `chrome://policy` reports `URLAllowlist`
 — Status: **Error** on the grip build, unrelated to the downloads fix and
 never diagnosed (likely the bare `mailto`/`mailto:` entries and a duplicated
-`discover.alzheimersdata.org` entry in `policy.json`). See
-`grip-production`'s `README-GRIP-PROD.md` before that build carries real
-traffic.
+`discover.alzheimersdata.org` entry in `policy.json`). To diagnose, expand
+the `URLAllowlist` row in `chrome://policy` and read the specific error before
+that build carries real traffic.
 
 ---
 
