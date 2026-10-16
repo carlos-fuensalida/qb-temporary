@@ -1,6 +1,7 @@
 #!/bin/sh
-# Make the file save dialog open at /downloads instead of the container's
-# home dir (/config) the very first time a user clicks "Download Results".
+# Make the file save and upload dialogs open at the shared downloads
+# directory instead of the container's home dir (/config) the very first
+# time a user clicks "Download Results" or picks a file to upload.
 #
 # Why this is separate from the DownloadDirectory policy: Query Builder saves
 # through the File System Access API (window.showSaveFilePicker) rather than
@@ -33,6 +34,15 @@
 # keeps the entry. (A seed written into a profile that has already launched
 # once also survives, which is why this looked like it worked on restarts.)
 #
+# Uploads are a second, separate mechanism. A plain <input type="file">
+# upload button does not use the File System Access API: Chromium starts that
+# dialog in the folder stored in the profile preference
+# selectfile.last_directory, and with nothing stored it falls back to $HOME —
+# /config. The seed below sets that preference too, so the upload dialog opens
+# at the shared downloads directory as well. Verified on Chromium 152: on a
+# fresh container the upload dialog opened at the share with it, and at
+# /config without it.
+#
 # NOTE: this only takes effect on a fresh /config. A container recreated
 # against an existing /config volume keeps whatever that profile already
 # remembered — see README-STAGING-GRIP.md for the `docker rm -f -v` step.
@@ -63,7 +73,8 @@ mkdir -p "$PROFILE_DIR"
 # See the "First Run" note above — without this the seed is erased on launch.
 touch /config/chromium/"First Run"
 cat > "$PREFS" <<EOF
-{"profile":{"content_settings":{"exceptions":{"file_system_last_picked_directory":{"https://qbt-staging.fdsaservices.com:443,*":$ENTRY,"https://fdsa-query-builder.alzheimersdata.org:443,*":$ENTRY,"https://qbt-pre-prod.fdsaservices.com:443,*":$ENTRY}}}}}
+{"profile":{"content_settings":{"exceptions":{"file_system_last_picked_directory":{"https://qbt-staging.fdsaservices.com:443,*":$ENTRY,"https://fdsa-query-builder.alzheimersdata.org:443,*":$ENTRY,"https://qbt-pre-prod.fdsaservices.com:443,*":$ENTRY}}}},"selectfile":{"last_directory":"$DOWNLOAD_DIR"}}
 EOF
 
 echo "[seed-picker-dir] seeded $PREFS with $DOWNLOAD_DIR as the last-picked directory"
+echo "[seed-picker-dir] seeded the upload dialog's starting folder (selectfile.last_directory) with $DOWNLOAD_DIR"
