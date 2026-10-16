@@ -5,15 +5,13 @@
 | Target site | `https://fdsa-query-builder.alzheimersdata.org/qbt/` |
 | Branch | `grip-production` |
 | Image tag | `qbtcontainers.azurecr.io/qbtcontainer:grip` |
-| Bookmark label | `Query Builder v5` |
+| Bookmark label | `Query Builder v6` |
 | Delivery | `docker save` → `.tar` → air-gapped VM |
 
 A dedicated Chromium browser, delivered as a Docker container, that opens
 **Query Builder** and is locked to it. This is the only README for this
 branch. It covers the downloads-location problem that was reported, the fix,
-and how to build, deliver, deploy and verify the production image. Read the
-[Known issue](#known-issue--read-before-going-live) before it carries real
-traffic.
+and how to build, deliver, deploy and verify the production image.
 
 ---
 
@@ -103,6 +101,18 @@ as though a user had already saved there once.
 > That makes the `-v` in step 2 below **required**, not optional: without it
 > the container keeps the old profile and the seed never applies.
 
+### Uploads use a different setting
+
+The file dialog that opens when a user uploads a file (an ordinary "Choose
+file" button) is not the File System Access picker. Chromium starts it in the
+folder stored in the profile preference `selectfile.last_directory`, and with
+nothing stored it opens at `$HOME` — `/config`. The same seed script now sets
+that preference to the configured downloads directory, so the upload dialog
+opens at the shared drive too. Testing on Chromium 152 confirmed it: a fresh
+container opened the upload dialog at the share with the setting, and at
+`/config` without it. Images up to v5 did not set it. As with the save
+dialog, it is written only into a fresh `/config`.
+
 ---
 
 ## Building the image
@@ -172,7 +182,7 @@ propagates it to everything that needs it:
 | `policy.json` → `DownloadDirectory` / `DefaultDownloadDirectory` | where automatic downloads land |
 | `user-dirs.dirs` → `XDG_DOWNLOAD_DIR` | the dialog sidebar's "Downloads" shortcut |
 | `gtk-3.0/bookmarks` | the same shortcut, for dialogs that read bookmarks instead |
-| `62-seed-picker-dir.sh` | the folder the save dialog **opens at** |
+| `62-seed-picker-dir.sh` | the folder the save **and upload** dialogs **open at** |
 | `fix-downloads` service | which directory gets its permissions relaxed |
 
 Set it to whatever you mount the share at. Nothing else needs editing, and
@@ -349,6 +359,15 @@ Expect the key followed by an entry naming the Query Builder origin and
 `<DOWNLOAD_DIR>`. If it ends in `{}`, the seed was discarded — the image is
 missing the `First Run` fix.
 
+Confirm the upload dialog's starting folder too:
+
+```bash
+docker exec qb sh -c 'tr "," "\n" < /config/chromium/Default/Preferences | grep selectfile'
+```
+
+Expect `"selectfile":{"last_directory":"<DOWNLOAD_DIR>"}`. If nothing is
+printed, the image is older than v6 and uploads will open at `/config`.
+
 ### 7. Verify the actual fix
 
 Open `http://<host-ip>:4443`. Run a query, click **Download Results**, and
@@ -364,6 +383,9 @@ It should show up there, and **not** under
 `/var/snap/docker/.../volumes/.../_data` (or, on other Docker installs,
 `/var/lib/docker/volumes/.../_data`).
 
+Then click an upload button (any "Choose file" control in Query Builder) and
+confirm that dialog also opens at the shared drive, showing the files on it.
+
 ### 8. Check startup time (GRIP / any mount inside `/config`)
 
 Time how long the container took to become ready. A sudden multi-minute
@@ -375,7 +397,7 @@ above; stop and re-check the mount type rather than shipping it.
 ### 9. Confirm the bookmark label
 
 The bookmark bar should show the label for whichever build this is (e.g.
-`Query Builder v5`) — a quick way to confirm the right image is
+`Query Builder v6`) — a quick way to confirm the right image is
 running without opening `chrome://policy`. See
 [root/defaults/Bookmarks](root/defaults/Bookmarks).
 
@@ -388,6 +410,8 @@ running without opening `chrome://policy`. See
 - The native file-picker's "Downloads" shortcut, and the "Download Results"
   save dialog, both open directly into the shared drive instead of an
   empty/unrelated folder or the bare `/config` root.
+- Upload dialogs ("Choose file") also open directly in the shared drive
+  instead of `/config`.
 - Automatic/silent downloads continue to work exactly as before — only the
   manual-save path changes.
 - Container startup time is unchanged from before this fix.
