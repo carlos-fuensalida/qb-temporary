@@ -56,6 +56,57 @@ services:
       - /mnt/vm-shared-storage:/downloads:rw
 ```
 
+## Examples with `QB_DOWNLOAD_DIR`
+
+`QB_DOWNLOAD_DIR` and the container side of `-v` must always be the same path.
+
+**1. Default location, set explicitly** (shared drive at `/downloads`, outside `/config`):
+
+```bash
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/downloads \
+  -p 4443:4443 \
+  -v /mnt/vm-shared-storage:/downloads:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
+```
+
+**2. Shared drive inside `/config`:**
+
+```bash
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/config/Downloads \
+  -p 4443:4443 \
+  -v /mnt/vm-shared-storage:/config/Downloads:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
+```
+
+**3. Any other path, with a different host port and time zone:**
+
+```bash
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e TZ=Europe/London \
+  -e QB_DOWNLOAD_DIR=/data/qb-files \
+  -p 8443:4443 \
+  -v /mnt/vm-shared-storage:/data/qb-files:rw \
+  qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
+```
+
+Open it at `http://<host-ip>:8443` in example 3. Paths under `/config` (example 2)
+can slow start-up on a network share; see
+[why](#why-the-default-is-outside-config).
+
 ---
 
 ## Options
