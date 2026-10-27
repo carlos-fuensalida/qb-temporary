@@ -9,7 +9,7 @@
 # /downloads (not /config/Downloads) is intentional: it keeps the mounted
 # volume outside /config so the base image's per-start recursive chown of
 # /config never has to walk it — see the Dockerfile for why that matters.
-DIR=/downloads
+DIR="$(cat /var/run/qb-download-dir 2>/dev/null || echo /downloads)"
 FILE_MODE=666
 DIR_MODE=777
 
