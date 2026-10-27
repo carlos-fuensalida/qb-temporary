@@ -249,7 +249,8 @@ docker rm -f -v qb
 
 ## Build and publish
 
-### 1. Our registry (`qbtcontainers.azurecr.io`)
+AHA pulls the image straight from our registry (`qbtcontainers.azurecr.io`),
+so publishing is a single push:
 
 ```bash
 docker login -u read-write -p <password> qbtcontainers.azurecr.io
@@ -257,23 +258,6 @@ docker login -u read-write -p <password> qbtcontainers.azurecr.io
 docker build -t qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest .
 docker push qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
 ```
-
-### 2. AHA's registry (Aridhia)
-
-The image is mirrored to AHA's own registry, which the AHA environment pulls from:
-
-```bash
-docker login -u read-write -p <SOURCE_REGISTRY_PASSWORD> qbtcontainers.azurecr.io
-docker pull qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
-docker tag qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt_staging:latest
-docker login -u fdsa-qbt -p <TARGET_REGISTRY_PASSWORD> acrwesteuropeaddi.azurecr.io
-docker push acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt_staging:latest
-```
-
-| Registry | Image |
-|---|---|
-| Ours | `qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest` |
-| AHA | `acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt_staging:latest` |
 
 ---
 
