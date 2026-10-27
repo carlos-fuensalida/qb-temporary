@@ -3,11 +3,10 @@
 #
 # Which path the shared drive is mounted at is a DEPLOYMENT decision, not
 # something this image should dictate:
-#   - The AKS automation workspaces mount it at /downloads, deliberately
-#     outside /config (see README-PRODUCTION-GRIP.md — the base image recursively chowns all
-#     of /config on every start, and over a network share that becomes a
-#     per-file round trip and minutes of startup time).
-#   - GRIP mounts it at /config/Downloads instead.
+#   - /downloads keeps it outside /config (see README-GRIP-PRODUCTION.md — the base image
+#     recursively chowns all of /config on every start, and over a network
+#     share that becomes a per-file round trip and minutes of startup time).
+#   - /config/Downloads also works, at the cost of that slower start.
 # Hardcoding either one breaks the other, so take it from the environment:
 #
 #   docker run -e QB_DOWNLOAD_DIR=/config/Downloads -v <share>:/config/Downloads:rw ...
@@ -56,5 +55,5 @@ if [ "$DIR" != "${DIR#/config/}" ]; then
   echo "[set-download-dir] NOTE: $DIR is inside /config, which the base image"
   echo "[set-download-dir] recursively chowns on every start. If the share is a"
   echo "[set-download-dir] network filesystem this can slow startup considerably"
-  echo "[set-download-dir] as it fills up — see README-PRODUCTION-GRIP.md."
+  echo "[set-download-dir] as it fills up — see README-GRIP-PRODUCTION.md."
 fi
