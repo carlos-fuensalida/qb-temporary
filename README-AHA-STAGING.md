@@ -273,7 +273,7 @@ docker push acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fd
 | Registry | Image |
 |---|---|
 | Ours | `qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest` |
-| AHA (Aridhia) | `acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt_staging:latest` |
+| AHA | `acrwesteuropeaddi.azurecr.io/0a6ed49f-321c-4320-b746-6b72de4f2640/fdsa_qbt_staging:latest` |
 
 ---
 
