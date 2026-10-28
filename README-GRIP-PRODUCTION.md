@@ -19,6 +19,13 @@ uploads use a shared drive mounted into the container.
 - **Downloads** go to the mounted shared drive and are made readable and
   writable for other users and groups automatically.
 
+> **GRIP and AHA are different projects.** This document covers the GRIP image
+> only. AHA has its own code, image names and documents
+> (`README-AHA-STAGING.md`, `README-AHA-PRODUCTION.md`) and is released as v7 on
+> the v3 code line: its shared drive is always mounted at `/downloads`, and it
+> has **no** `QB_DOWNLOAD_DIR` and no file-dialog seeding. Do not mix their
+> instructions.
+
 ---
 
 ## Quick start
