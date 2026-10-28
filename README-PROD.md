@@ -53,7 +53,7 @@ docker run -d \
   -e USER_ID=10001 -e GROUP_ID=1001 \
   -p 4443:4443 \
   -v /files/shared/drive:/downloads:rw \
-  qbtcontainers.azurecr.io/qbtcontainer:latest
+  qbtcontainers.azurecr.io/qbtcontaineraha:latest
 ```
 
 Replace `/files/shared/drive` with your actual shared/network path (in AKS,
