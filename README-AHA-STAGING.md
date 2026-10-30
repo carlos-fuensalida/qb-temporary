@@ -354,6 +354,21 @@ docker push qbtcontainers.azurecr.io/qbtstagingcontaineraha:latest
 
 ## Troubleshooting
 
+### Diagnostic script
+
+[`check-qb.sh`](check-qb.sh) checks the running container and reports what is
+wrong in plain language — image version, where downloads resolve to, whether
+that folder is really on the shared drive, whether the app user can write to
+it, and whether the save dialog was seeded. Run it on the Docker host:
+
+```bash
+./check-qb.sh          # or: ./check-qb.sh <container-name>
+```
+
+It is read-only apart from one zero-byte write test, which it removes. It
+exits non-zero if any check fails, so it can be used in a smoke test.
+
+
 | Symptom | Likely cause / fix |
 |---|---|
 | Files appear in the container but not on the shared drive | `QB_DOWNLOAD_DIR` points somewhere that is not on the share — or a second mount was added for a folder inside the share, which hides it. Mount the share once, and set the variable to that path or a folder inside it. |
