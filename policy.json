@@ -15,11 +15,9 @@
     "pmp-auth-dev.heartblr.org",
     "www.alzheimersdata.org",
     "alzheimersdata.org",
-    "mailto",
-    "mailto:",
+    "mailto:*",
     "https://fdsa-query-builder.alzheimersdata.org",
     "https://qbt-pre-prod.fdsaservices.com",
-    "https://discover.alzheimersdata.org",
     "https://aha-shared-v2.auth.us-east-1.amazoncognito.com",
     "https://answerdataportal.b2clogin.com",
     "https://accounts.google.com",
@@ -27,7 +25,6 @@
     "https://discover.alzheimersdata.org",
     "https://orcid.org",
     "heart-onmicrosoft-com.access.mcas.ms"
-
   ],
 
   "ShowHomeButton": true,
@@ -35,6 +32,7 @@
   "HomepageIsNewTabPage": false,
 
   "DownloadDirectory": "/downloads",
+  "DefaultDownloadDirectory": "/downloads",
 
   "RestoreOnStartup": 4,
   "RestoreOnStartupURLs": ["https://qbt-staging.fdsaservices.com/qbt/"],
@@ -45,6 +43,8 @@
   ],
 
   "DefaultBrowserSettingEnabled": false,
+  "ExtensionInstallForcelist": ["pnbbookneacpggbngfmhfggennhigonh"],
+
   "BrowserSignin": 0,
   "SyncDisabled": true
 }
