@@ -1,0 +1,80 @@
+#!/bin/sh
+# Make the file save and upload dialogs open at the shared downloads
+# directory instead of the container's home dir (/config) the very first
+# time a user clicks "Download Results" or picks a file to upload.
+#
+# Why this is separate from the DownloadDirectory policy: Query Builder saves
+# through the File System Access API (window.showSaveFilePicker) rather than
+# a plain browser download — the dialog's title bar carries Chromium's
+# "Warning: this site can see edits you make" wording, which is that API's
+# picker. That API ignores DownloadDirectory/DefaultDownloadDirectory
+# entirely. Its starting folder comes from either a startIn hint the web page
+# passes (Query Builder passes none, and that is the app's call to make, not
+# ours) or, failing that, the directory the origin last picked. With no
+# remembered directory, Chromium falls back to $HOME — /config — which is
+# what users were seeing.
+#
+# Chromium records that memory as a content-settings exception under
+# file_system_last_picked_directory, verified by reading it out of a
+# container where a user had saved to /downloads once. Seeding it up front
+# means a brand new container behaves as if that had already happened.
+#
+# Only seeds a profile that does not exist yet. Chromium creates Preferences
+# on first run, so writing it beforehand lets Chromium fill in every other
+# default around what we set. Patching an existing Preferences would mean
+# editing nested JSON with sed (no jq or python in this image), which is not
+# worth the risk of corrupting a live profile — and an existing profile has
+# already remembered a directory of its own anyway.
+#
+# The "First Run" marker below is what makes the seed survive. Verified on
+# Chromium 152: with no marker, Chromium treats the first launch of a profile
+# as a first run and rewrites Preferences, leaving
+# file_system_last_picked_directory empty ({}) — the seed is silently
+# discarded and the dialog opens at /config again. Creating the marker first
+# keeps the entry. (A seed written into a profile that has already launched
+# once also survives, which is why this looked like it worked on restarts.)
+#
+# Uploads are a second, separate mechanism. A plain <input type="file">
+# upload button does not use the File System Access API: Chromium starts that
+# dialog in the folder stored in the profile preference
+# selectfile.last_directory, and with nothing stored it falls back to $HOME —
+# /config. The seed below sets that preference too, so the upload dialog opens
+# at the shared downloads directory as well. Verified on Chromium 152: on a
+# fresh container the upload dialog opened at the share with it, and at
+# /config without it.
+#
+# NOTE: this only takes effect on a fresh /config. A container recreated
+# against an existing /config volume keeps whatever that profile already
+# remembered — see README-AHA-PRODUCTION.md for the `docker rm -f -v` step.
+
+PROFILE_DIR=/config/chromium/Default
+PREFS="$PROFILE_DIR/Preferences"
+
+if [ -e "$PREFS" ]; then
+  echo "[seed-picker-dir] $PREFS already exists; leaving the profile alone"
+  exit 0
+fi
+
+# Resolved by 59-set-download-dir.sh, which runs first.
+DOWNLOAD_DIR="$(cat /var/run/qb-download-dir 2>/dev/null || echo /downloads)"
+
+# Timestamps are Chromium's internal format (microseconds since 1601). The
+# values are copied from a real captured entry; they only record when the
+# directory was last picked, so a fixed point in the past is fine.
+LAST_MODIFIED="13431206074976115"
+TIMESTAMP="13431206074976105"
+
+# Every origin this image is pointed at across environments. Listing them all
+# keeps this file out of the per-environment edit list in README-AHA-PRODUCTION.md — one
+# image behaves correctly whichever URL policy.json is built for.
+ENTRY='{"last_modified":"'"$LAST_MODIFIED"'","setting":{"default-id":{"display-name":"downloads","path":"'"$DOWNLOAD_DIR"'","path-type":0,"timestamp":"'"$TIMESTAMP"'"}}}'
+
+mkdir -p "$PROFILE_DIR"
+# See the "First Run" note above — without this the seed is erased on launch.
+touch /config/chromium/"First Run"
+cat > "$PREFS" <<EOF
+{"profile":{"content_settings":{"exceptions":{"file_system_last_picked_directory":{"https://qbt-staging.fdsaservices.com:443,*":$ENTRY,"https://fdsa-query-builder.alzheimersdata.org:443,*":$ENTRY,"https://qbt-pre-prod.fdsaservices.com:443,*":$ENTRY}}}},"selectfile":{"last_directory":"$DOWNLOAD_DIR"}}
+EOF
+
+echo "[seed-picker-dir] seeded $PREFS with $DOWNLOAD_DIR as the last-picked directory"
+echo "[seed-picker-dir] seeded the upload dialog's starting folder (selectfile.last_directory) with $DOWNLOAD_DIR"
