@@ -146,7 +146,7 @@ can slow start-up on a network share; see
 | `--restart=unless-stopped` | Restart after a crash or host reboot. |
 | `--shm-size 2g` | Shared memory for Chromium. Without enough, tabs crash on heavy pages. |
 | `-p 4443:4443` | Publishes the web UI. Change the left side (`-p 8443:4443`) to use another host port. |
-| `-v <share>:/downloads:rw` | Mounts the shared drive. The container-side path must equal `QB_DOWNLOAD_DIR`. |
+| `-v <share>:/downloads:rw` | Mounts the shared drive. `QB_DOWNLOAD_DIR` must be this path, or a folder inside it. Mount the share once — do not add a second mount for a folder inside it. |
 
 ### Environment variables
 
@@ -154,7 +154,7 @@ Set by this image:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `QB_DOWNLOAD_DIR` | `/downloads` | Container path where downloads are saved and the file dialogs start. Absolute path only. Must match the container side of the `-v` mount. See [below](#changing-the-download-directory-qb_download_dir). |
+| `QB_DOWNLOAD_DIR` | `/downloads` | Container path where downloads are saved and the file dialogs start. Absolute path only. Must be on the shared drive: either the mount point itself, or any folder inside a share that is already mounted. See [below](#changing-the-download-directory-qb_download_dir). |
 | `APP_NAME` | `Query Builder` | Window/page title. Baked into the image. |
 | `WEB_LISTENING_PORT` | `4443` | Port the web UI listens on inside the container. Baked in; if you change it, change `-p` too. |
 
@@ -175,17 +175,28 @@ The base image documents many more; see its README for the full list.
 
 ## Changing the download directory (`QB_DOWNLOAD_DIR`)
 
-`QB_DOWNLOAD_DIR` decides where the shared drive appears inside the container.
-It drives all of these, so they always agree: Chromium's download folder, the
-folder the download/save and upload dialogs open at, the "Downloads" shortcut
-in the file chooser, and the permission-fixing service.
+`QB_DOWNLOAD_DIR` is the folder downloads are saved to, as the container sees
+it. It drives all of these, so they always agree: Chromium's download folder,
+the folder the download/save and upload dialogs open at, the "Downloads"
+shortcut in the file chooser, and the permission-fixing service.
+
+There are two shapes. Either the share gets its own mount at that exact path:
 
 ```bash
-# default
+# default — share mounted at /downloads
 -v /mnt/vm-shared-storage:/downloads:rw
 
-# custom location
+# share mounted somewhere else, at that exact path
 -e QB_DOWNLOAD_DIR=/config/Downloads \
+-v /mnt/vm-shared-storage:/config/Downloads:rw
+```
+
+…or the share is already mounted and you want a folder inside it, in which
+case the mount does not change and only the variable goes deeper:
+
+```bash
+# share already mounted at /config/Downloads; downloads into a subfolder
+-e QB_DOWNLOAD_DIR=/config/Downloads/workspace_files/query_builder_downloads \
 -v /mnt/vm-shared-storage:/config/Downloads:rw
 ```
 
@@ -228,13 +239,24 @@ One mount, pointed deeper. Adding a second mount at
 folder with a different, empty volume — downloads would appear to save, and
 would never reach EFS.
 
-The same applies to `docker run`: when `/mnt/vm-shared-storage` is already
-mounted at `/config/Downloads`, a subfolder needs the variable only.
+The same applies to `docker run`. The mount stays on the share itself; only
+`QB_DOWNLOAD_DIR` goes deeper:
 
 ```bash
--e QB_DOWNLOAD_DIR=/config/Downloads/workspace_files/query_builder_downloads \
--v /mnt/vm-shared-storage:/config/Downloads:rw      # unchanged — one mount
+docker run -d \
+  --name=qb \
+  --restart=unless-stopped \
+  --shm-size 2g \
+  -e USER_ID=10001 -e GROUP_ID=1001 \
+  -e QB_DOWNLOAD_DIR=/config/Downloads/workspace_files/query_builder_downloads \
+  -p 4443:4443 \
+  -v /mnt/vm-shared-storage:/config/Downloads:rw \
+  qbtcontainers.azurecr.io/qbtcontaineraha:latest
 ```
+
+Note the two paths are deliberately **different**: `-v` mounts the share at
+`/config/Downloads`, and `QB_DOWNLOAD_DIR` names a folder inside it. There is
+still only one mount.
 
 Also check `USER_ID`/`GROUP_ID` match the owner of the share itself. The
 examples here use `10001`/`1001`; a deployment whose share is owned by another
@@ -334,7 +356,7 @@ docker push qbtcontainers.azurecr.io/qbtcontaineraha:latest
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Files appear in the container but not on the shared drive | `QB_DOWNLOAD_DIR` and the container side of `-v` differ. Make them identical. |
+| Files appear in the container but not on the shared drive | `QB_DOWNLOAD_DIR` points somewhere that is not on the share — or a second mount was added for a folder inside the share, which hides it. Mount the share once, and set the variable to that path or a folder inside it. |
 | "Permission denied" writing to the drive | `USER_ID` / `GROUP_ID` do not match the drive's owner. Use the values from `id <username>` on the host. |
 | Slow start, long pause at start-up | The share is mounted inside `/config`. Mount it outside (default `/downloads`). |
 | Dialogs still open at `/config` after changing settings | The old `/config` volume was reused. Run `docker rm -f -v qb` and start again. |
